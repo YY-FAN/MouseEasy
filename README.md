@@ -4,7 +4,9 @@
 
 **让 Mac 没有难用的鼠标。**
 
-滚轮按你的方向，触控板保留原来的手感。从浏览器切回编辑器，拇指轻点一下侧键就够了。MouseEasy 是一款开源的 Mac 鼠标工具。
+MouseEasy 基于 LinearMouse，为普通刻度滚轮加入了开箱即用的「流畅滚动」预设。两个侧键可以一键设为切换窗口和应用，换一只鼠标也能沿用常用的滚动和按键设置。
+
+Built on LinearMouse, MouseEasy smooths out a notched wheel by default. One preset maps your two side buttons to window and app switching, and you can carry your scrolling and button settings over to your next mouse.
 
 [下载 Mac 版](https://github.com/YY-FAN/MouseEasy/releases/latest) · [首次安装](#下载与安装) · [English](#english) · [开发与构建](docs/development.md)
 
