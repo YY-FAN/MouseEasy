@@ -1,0 +1,8 @@
+/* Bundle name */
+"CFBundleName" = "MouseEasy";
+
+
+"CFBundleDisplayName" = "MouseEasy";
+
+"NSBluetoothAlwaysUsageDescription" = "MouseEasy 用蓝牙读取鼠标和触控板的电量。";
+"NSAppleEventsUsageDescription" = "运行你指定的脚本时，可能需要控制脚本指定的应用。";

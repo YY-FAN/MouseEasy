@@ -1,0 +1,3 @@
+
+"NSBluetoothAlwaysUsageDescription" = "MouseEasy uses Bluetooth to read battery levels from mice and trackpads.";
+"NSAppleEventsUsageDescription" = "A script you run may request access to the apps it controls.";

@@ -1,0 +1,23 @@
+// MIT License
+// Copyright (c) 2021-2026 LinearMouse
+
+import SwiftUI
+
+struct DetailView<T: View>: View {
+    var schemeSpecific = true
+    var content: () -> T
+
+    @ObservedObject var schemeState = SchemeState.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if schemeSpecific, !schemeState.isSchemeValid {
+                Text("No device selected.")
+                    .frame(maxWidth: .infinity, minHeight: 80)
+            } else {
+                content()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+}

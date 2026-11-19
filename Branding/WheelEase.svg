@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- SPDX-License-Identifier: MIT; Copyright (c) 2026 WheelEase contributors -->
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="tile" x1="140" y1="110" x2="880" y2="920" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#3C7965"/>
+      <stop offset="1" stop-color="#254A40"/>
+    </linearGradient>
+    <filter id="shadow" x="-25%" y="-25%" width="150%" height="160%">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#362652" flood-opacity="0.24"/>
+    </filter>
+  </defs>
+  <rect x="96" y="96" width="832" height="832" rx="185" fill="url(#tile)" filter="url(#shadow)"/>
+  <path d="M273 615 C381 641 427 529 492 446 C533 393 577 380 628 395" fill="none" stroke="#93E5C5" stroke-width="73" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M348 716 C474 728 534 609 604 520 C644 470 683 451 738 463" fill="none" stroke="#EAF4D3" stroke-width="76" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M328 473 L370 412" fill="none" stroke="#F8E8AD" stroke-width="52" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
