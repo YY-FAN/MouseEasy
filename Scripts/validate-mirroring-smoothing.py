@@ -445,19 +445,17 @@ for profile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirror30Hz] {
         require(abs(detentDistance(replay) / originalDistance - 1) < 0.04,
                 "Burst smoothing changed the overall travel")
         let moving = movingFrameTimes(replay)
-        var pauses: [Double] = []
-        for index in 2 ..< bursts.count {
-            let start = bursts[index][0]
-            let before = moving.last { $0 < start }!
-            let after = moving.first { $0 >= start }!
-            pauses.append(after - before)
-        }
-        let ordered = pauses.sorted()
-        let median = (ordered[(ordered.count - 1) / 2] + ordered[ordered.count / 2]) / 2
-        let longest = pauses.max()!
-        print("Packet replay at \(Int(1 / profile.timerInterval)) Hz: median gap \(Int((median * 1000).rounded())) ms, longest \(Int((longest * 1000).rounded())) ms, travel \(detentDistance(replay)) pt")
-        if median > 0.135 || longest > 0.27 {
-            timingFailures.append("Repeated groups leave long gaps at \(profile)")
+        // The pause between separate strokes is intentional. Check responsiveness
+        // during the measured input packets and exclude the user's lift intervals.
+        for burst in bursts {
+            for time in burst {
+                let nextMove = moving.first { $0 >= time }
+                require(nextMove.map { $0 - time <= profile.timerInterval + 0.001 } == true,
+                        "No movement on the first timer tick after a burst packet")
+            }
+            let active = moving.filter { $0 >= burst.first! && $0 <= burst.last! }
+            let worstGap = zip(active, active.dropFirst()).map { $1 - $0 }.max() ?? 0
+            require(worstGap <= 2 * profile.timerInterval + 0.001, "Movement stalled inside an active burst")
         }
         let phases = replay.compactMap { ScrollWheelEventView($0.event).scrollPhase }
         var open = false
@@ -505,6 +503,46 @@ for profile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirror30Hz] {
         if pair.0.time < firstPacketTime || pair.0.time > firstPacketTime + profile.timerInterval + 0.001 {
             timingFailures.append("New stroke did not begin on the next moving frame")
         }
+    }
+}
+// Real line deltas and relative input times during the same-page trackpad/wheel comparison.
+let comparisonBursts: [[(ms: Int, lines: Int32)]] = [
+    [(0, 1), (66, 1), (110, 1), (334, 1), (408, 1), (496, 1)],
+    [(964, 1), (1000, 1), (1036, 2), (1134, 2), (1214, 2)],
+    [(1784, 1), (1816, 1), (1852, 2), (1890, 3), (1942, 4)],
+    [(2426, 1), (2452, 1), (2470, 2), (2493, 4), (2532, 4)],
+    [(3052, 1), (3078, 1), (3096, 2), (3128, 4), (3192, 4)],
+    [(3614, 1), (3632, 1), (3650, 3), (3668, 4), (3694, 4)],
+    [(4140, 1), (4158, 1), (4176, 3), (4204, 4), (4238, 4), (4318, 4)],
+    [(4678, 1), (4696, 1), (4724, 2), (4740, 4), (4776, 4)],
+    [(5188, 1), (5214, 1), (5232, 2), (5250, 4), (5274, 4), (5304, 5)],
+    [(5840, 1), (5858, 1), (5876, 3), (5894, 4), (5912, 5), (5956, 5)],
+    [(7022, 1), (7076, 1), (7130, 1), (7282, 1), (7426, 1)],
+]
+let comparisonPackets = comparisonBursts.flatMap { $0 }
+func median(_ values: [Double]) -> Double {
+    let sorted = values.sorted()
+    return (sorted[(sorted.count - 1) / 2] + sorted[sorted.count / 2]) / 2
+}
+for profile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirror30Hz] {
+    let frames = steadyWheel(speed: nil, usesMirrorWheelTuning: true,
+        times: comparisonPackets.map { Double($0.ms) / 1000 },
+        eventAtIndex: { wheel(-comparisonPackets[$0].lines) }, profile: profile)
+    let starts = frames.filter { ScrollWheelEventView($0.event).scrollPhase == .began }.map(\.time)
+    let ends = frames.filter { ScrollWheelEventView($0.event).scrollPhase == .ended }.map(\.time)
+    require(starts.count == comparisonBursts.count && ends.count == starts.count, "One contact per measured wheel stroke")
+    let durations = zip(starts, ends).map { $1 - $0 }
+    let lifts = zip(ends, starts.dropFirst()).map { $1 - $0 }
+    let travel = detentDistance(frames)
+    // Build 31 produced this signed total with the same input and timer.
+    require(abs(travel + 7049) <= 1, "The timing comparison changed wheel travel")
+    print("Same-page replay \(Int(1/profile.timerInterval)) Hz: strokes \(starts.count), median contact \(Int((median(durations)*1000).rounded())) ms, median lift \(Int((median(lifts)*1000).rounded())) ms, travel \(travel) pt")
+    for (start, burst) in zip(starts, comparisonBursts) {
+        let latency = start - Double(burst[0].ms) / 1000
+        require(latency >= 0 && latency <= profile.timerInterval + 0.001, "A new stroke was delayed")
+    }
+    if !(0.18 ... 0.36).contains(median(durations)) || median(lifts) < 0.22 {
+        timingFailures.append("Measured wheel strokes lacked a trackpad-like contact and lift interval")
     }
 }
 let burstWithoutTail = packetTurns[0].flatMap { $0 }.map { Double($0) / 1000 }

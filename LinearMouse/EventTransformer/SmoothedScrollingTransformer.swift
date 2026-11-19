@@ -314,7 +314,12 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
         } else {
             emission = engine.advance(to: timestamp)
         }
-        if let emission { post(emission: emission) }
+        if let emission {
+            post(emission: emission)
+        } else if usesMirrorWheelTuning, syntheticGestureScrollSeriesActive,
+                  mirrorWheelMotion.shouldLiftAfterBurst(at: timestamp) {
+            post(emission: .init(deltaX: 0, deltaY: 0, phase: .touchEnded))
+        }
 
         let isRunning = usesMirrorWheelTuning ? mirrorWheelMotion.isRunning : engine.isRunning
         if !isRunning {
@@ -556,6 +561,13 @@ private struct MirrorWheelMotion {
 
     private(set) var isRunning = false
 
+    func shouldLiftAfterBurst(at time: TimeInterval) -> Bool {
+        guard previousBurstGap != nil, burstHasMultiplePackets, pulses.isEmpty, let lastInput else { return false }
+        return time - lastInput >= Self.packetInterval
+    }
+
+    private static let packetInterval: TimeInterval = 0.12
+
     func followsPausedBurst(at time: TimeInterval) -> Bool {
         // Wheel packets within the same burst are typically tens of milliseconds
         // apart. Only separate an established burst after a clear pause.
@@ -609,7 +621,7 @@ private struct MirrorWheelMotion {
         let spacedDuration = reverses ? 0 : min(1.10 * gap, longestGlide, 2 * longestGlide - gap)
         // Some wheels send several packets 10–100 ms apart on each slow turn.
         // The short spacing describes a single burst, not the rhythm of the hand.
-        let withinBurst = !reverses && gap < 0.12
+        let withinBurst = !reverses && gap < Self.packetInterval
         if withinBurst {
             burstHasMultiplePackets = true
         } else {
@@ -618,11 +630,13 @@ private struct MirrorWheelMotion {
         }
         let burstDuration = withinBurst ? min(previousBurstGap ?? 0, 2.5 * tail, 0.45) : 0
         let duration = max(baseDuration, spacedDuration, burstDuration)
-        // Leave room for the next physical notch to arrive slightly late.
-        // This extends only the open phase, not the distance or the animation.
+        // Keep the previous gain window independent of when we lift the contact.
+        // Spaced bursts finish on the user's base curve, leaving the physical
+        // pause free. Steady turns with single-packet notches still overlap.
+        let pulseDuration = previousBurstGap == nil ? duration : baseDuration
         endDelay = max(0.30, duration + 0.05)
         let speedGain = (0.85 + 0.4 * speed) / (0.85 + 0.4 * defaultSpeed)
-        pulses.append(.init(distance: distance * (gain * speedGain), start: time, duration: duration))
+        pulses.append(.init(distance: distance * (gain * speedGain), start: time, duration: pulseDuration))
     }
 
     mutating func advance(to time: TimeInterval) -> SmoothedScrollingEngine.Emission? {
