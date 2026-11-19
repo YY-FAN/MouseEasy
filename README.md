@@ -12,7 +12,7 @@ Built on LinearMouse, MouseEasy adds dedicated wheel settings for **iPhone Mirro
 
 ## 让鼠标按你的习惯工作
 
-- **单独调 iPhone 镜像。** 在「滚动 → iPhone 镜像」开启「使用镜像专用参数」。在「镜像滚动设置」选择平滑模式，就能分别调节速度、响应和收尾时间。试用时，轻拨一格就能让镜像里的列表移动。隔一会儿再拨一格，画面偶尔会顿一下。
+- **单独调 iPhone 镜像。** 在「滚动 → iPhone 镜像」开启「使用镜像专用参数」。在「镜像滚动设置」选择平滑模式，就能分别调节速度、响应和收尾时间。
 - **平滑滚轮，保留触控板手感。** 全新安装默认给普通刻度滚轮启用「流畅滚动」，纵向沿用系统方向。要反转鼠标滚轮，在「滚动」页切换方向即可。
 - **让侧键切换窗口和应用。** 两个侧键都未绑定时，在「按钮」页套用「窗口切换」。短按 #3 切换当前应用的窗口，短按 #4 切换应用。点击操作名称可以直接换成其他动作。
 - **换鼠标，接着用。** 把滚动和按键设置放在「所有鼠标」范围内。即使新鼠标没有侧键，也会继承滚动设置。还可以为某个应用单独调整手感。
@@ -42,7 +42,7 @@ MouseEasy is an open-source macOS mouse utility built on LinearMouse. It gives i
 
 ### Make your mouse work the way you do
 
-- **Tune the wheel for iPhone Mirroring.** Under **Scrolling → iPhone Mirroring**, turn on **Use mirroring settings**. Open **Mirroring scroll settings** and select smooth scrolling to adjust speed, responsiveness, and how long scrolling continues after you stop turning the wheel. In testing, a single notch moved the mirrored list, though the motion occasionally stuttered when scrolling one notch at a time with pauses in between.
+- **Tune the wheel for iPhone Mirroring.** Under **Scrolling → iPhone Mirroring**, turn on **Use mirroring settings**. Open **Mirroring scroll settings** and select smooth scrolling to adjust speed, responsiveness, and how long scrolling continues after you stop turning the wheel.
 - **Smooth your wheel and keep your trackpad’s feel.** A fresh install enables the **Flow** preset for notched wheels and follows the system’s vertical scroll direction. To reverse your mouse wheel, change its direction under **Scrolling**.
 - **Switch windows and apps with your side buttons.** If both side buttons are unassigned, choose **Use window switching preset** under **Buttons**. A short press on #3 cycles through windows of the current app, and #4 switches apps. Click either action name to choose a different one.
 - **Take your settings to your next mouse.** Save wheel and button settings under **All mice**. A mouse without side buttons still inherits your scrolling preferences. You can also override the settings for individual apps.
