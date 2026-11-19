@@ -312,11 +312,12 @@ for deliveryProfile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirro
 // during one steady turn. Check the HID event stream across those gaps.
 let detentTimes = (0 ..< 8).map { Double($0) * 0.07 }
 func steadyWheel(speed: Double?, usesMirrorWheelTuning: Bool, times: [Double],
-                 fineInput: Double? = nil, dropsFrames: Bool = false) -> [(time: Double, event: CGEvent)] {
-    let tuning = MirrorScrollSettings(speed: speed).tuning
+                 fineInput: Double? = nil, dropsFrames: Bool = false, tail: Double? = nil,
+                 profile: SmoothedScrollingDeliveryProfile = .iPhoneMirroring) -> [(time: Double, event: CGEvent)] {
+    let tuning = MirrorScrollSettings(speed: speed, duration: tail).tuning
     var now = 0.0
     var frames: [(time: Double, event: CGEvent)] = []
-    let transformer = SmoothedScrollingTransformer(smoothed: .init(vertical: tuning), deliveryProfile: .iPhoneMirroring,
+    let transformer = SmoothedScrollingTransformer(smoothed: .init(vertical: tuning), deliveryProfile: profile,
         usesMirrorWheelTuning: usesMirrorWheelTuning, now: { now }, eventSink: { event in
             if let rebuilt = IPhoneMirroringScrollCompatibility.makeRepostedEvent(from: event, usesCanonicalPixelDeltas: true) {
                 frames.append((now, rebuilt))
@@ -324,7 +325,7 @@ func steadyWheel(speed: Double?, usesMirrorWheelTuning: Bool, times: [Double],
         })
     var nextDetent = 0
     for frame in 1 ... 240 {
-        let tickTime = Double(frame) / 60
+        let tickTime = Double(frame) * profile.timerInterval
         while nextDetent < times.count && times[nextDetent] <= tickTime {
             now = times[nextDetent]
             let event = fineInput.map { precisionWheel($0, horizontal: false) } ?? wheel(1)
@@ -377,6 +378,40 @@ require(starts(delayed) == 1 && abs(detentDistance(delayed) - detentDistance(slo
         "Delayed ticks lost wheel distance or split the swipe")
 print("Slow precision and regular detents: \(detentDistance(fineCadence)) and \(detentDistance(slowDetents)) points")
 print("Slow turn: one gesture; distance with every fourth tick skipped: \(detentDistance(delayed)) points")
+
+// Inspect the time between delivered, nonzero point deltas during a slow turn.
+func movingFrameTimes(_ frames: [(time: Double, event: CGEvent)]) -> [Double] {
+    frames.filter { $0.event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1) != 0 }.map(\.time)
+}
+var timingFailures = [String]()
+for profile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirror30Hz] {
+    for gaps in [[0.275], [0.285], [0.32], [0.26, 0.31, 0.29, 0.32]] {
+        var times = [0.0]
+        for i in 0 ..< 7 { times.append(times.last! + gaps[i % gaps.count]) }
+        let frames = steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: times, profile: profile)
+        let moving = movingFrameTimes(frames).filter { $0 >= times[2] && $0 <= times.last! }
+        require(moving.count >= 2, "Missing slow turn movement")
+        let maxGap = zip(moving, moving.dropFirst()).map { $1 - $0 }.max()!
+        print("Cadence \(gaps), \(Int(1/profile.timerInterval)) Hz: longest moving-frame interval \(Int((maxGap * 1000).rounded())) ms, starts \(starts(frames)), distance \(detentDistance(frames))")
+        if maxGap > 0.085 || starts(frames) > 2 || !(730 ... 800).contains(detentDistance(frames)) {
+            timingFailures.append("Interrupted slow turn at \(gaps), \(profile)")
+        }
+        require(frames.last?.event.getIntegerValueField(phaseField) == Int64(CGScrollPhase.ended.rawValue),
+                "The final slow notch never ended")
+    }
+}
+let spaced = [0.0, 0.32, 0.64, 0.96]
+let noTail = steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: spaced, tail: 0)
+require(movingFrameTimes(noTail).last! - spaced.last! < 0.10, "Zero tail unexpectedly extended a notch")
+let isolated = movingFrameTimes(steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: [0]))
+let afterPause = steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: [0, 1])
+let restarted = movingFrameTimes(afterPause).filter { $0 >= 1 }
+require(starts(afterPause) == 2 && restarted.count == isolated.count, "A fresh gesture inherited stale wheel cadence")
+require(abs(restarted.last! - 1 - isolated.last!) < 1.0 / 60 + 0.000001, "A pause prolonged the next isolated stroke")
+require((0.12 ... 0.20).contains(isolated.last!), "Default single notch glide was too short or drifted after release")
+print("Isolated notch: last moving frame \(Int((isolated.last! * 1000).rounded())) ms")
+fflush(stdout)
+require(timingFailures.isEmpty, timingFailures.joined(separator: ", "))
 
 now = 0
 let desktop = SmoothedScrollingTransformer(smoothed: tuning, now: { now }, eventSink: { _ in })

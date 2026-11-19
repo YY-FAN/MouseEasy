@@ -70,7 +70,11 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
         }
 
         if preserveContinuousScrolling && view.continuous {
-            if timer != nil { deactivate() }
+            if timer != nil {
+                deactivate()
+            } else {
+                mirrorWheelMotion = MirrorWheelMotion()
+            }
             return event
         }
 
@@ -94,6 +98,7 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
                 stopTimer()
                 delivery.resetPointDeltaRemainders()
             }
+            mirrorWheelMotion = MirrorWheelMotion()
             return transformNativeContinuousGesture(
                 event,
                 view: view,
@@ -162,6 +167,7 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
     func deactivate() {
         endSyntheticGestureScrollSeriesIfNeeded(phase: .cancelled)
         stopTimer()
+        mirrorWheelMotion = MirrorWheelMotion()
         engine = SmoothedScrollingEngine(smoothed: smoothed)
         delivery.resetPointDeltaRemainders()
         lastFlags = []
@@ -294,7 +300,6 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
     private func stopTimer() {
         timer?.invalidate()
         timer = nil
-        mirrorWheelMotion = MirrorWheelMotion()
     }
 
     func tick() {
@@ -529,7 +534,7 @@ private struct MirrorWheelMotion {
 
         mutating func advance(to time: TimeInterval) -> SIMD2<Double> {
             let t = ((time - start) / duration).clamped(to: 0 ... 1)
-            let progress = t == 1 ? 1 : max(delivered, 0.72 * t * t * (3 - 2 * t) + 0.28 * t * (2 - t))
+            let progress = t == 1 ? 1 : max(delivered, t + t * t * (1 - t))
             defer { delivered = progress }
             return distance * (progress - delivered)
         }
@@ -537,10 +542,11 @@ private struct MirrorWheelMotion {
 
     private var pulses: [Pulse] = []
     private var lastInput: TimeInterval?
+    private var endDelay: TimeInterval = 0.30
     private var lastAxis: Int?
     private var lastDirection = SIMD2<Double>.zero
 
-    var isRunning: Bool { lastInput != nil }
+    private(set) var isRunning = false
 
     func changesAxis(to input: SIMD2<Double>) -> Bool {
         guard let current = Self.exclusiveAxis(of: input), let lastAxis else { return false }
@@ -552,6 +558,8 @@ private struct MirrorWheelMotion {
         let reverses = (0 ..< 2).contains { axis in
             input[axis] != 0 && lastDirection[axis] != 0 && input[axis].sign != lastDirection[axis].sign
         }
+        let continuesGesture = isRunning && !reverses
+        isRunning = true
         lastInput = time
         lastAxis = Self.exclusiveAxis(of: input)
         lastDirection = input
@@ -574,20 +582,26 @@ private struct MirrorWheelMotion {
 
         // Match the previous distance at a steady turn while giving separated
         // notches a full stroke. Packet bursts keep their decoded magnitude.
-        let gain = gap.isFinite && !reverses ? (1.55 + (gap - 0.07) * 13.1).clamped(to: 1.30 ... 2.73) : 2.60
+        let gain = continuesGesture ? (1.55 + (gap - 0.07) * 13.1).clamped(to: 1.30 ... 2.73) : 2.60
         let defaultSpeed = MirrorScrollSettings().scrollSpeed
         let speed = (tuning?.speed?.asTruncatedDouble ?? defaultSpeed).clamped(to: 0.1 ... 4)
         let response = (tuning?.response?.asTruncatedDouble ?? 0.62).clamped(to: 0 ... 2)
         let tail = (tuning?.duration?.asTruncatedDouble ?? 0.18).clamped(to: 0 ... 0.8)
-        let baseDuration = (0.075 + tail * 0.24 - response * 0.022).clamped(to: 0.065 ... 0.26)
-        let spacedDuration = tail > 0 && (0.08 ... 0.28).contains(gap) ? gap * 0.98 : 0
+        let baseDuration = (0.075 + tail * 0.5 - response * 0.022).clamped(to: 0.065 ... 0.32)
+        // Overlap repeated notches slightly. Beyond the longest useful glide,
+        // taper back to an isolated stroke instead of cutting at one interval.
+        let longestGlide = min(2 * tail, 0.42)
+        let spacedDuration = reverses ? 0 : min(1.10 * gap, longestGlide, 2 * longestGlide - gap)
+        let duration = max(baseDuration, spacedDuration)
+        // Leave room for the next physical notch to arrive slightly late.
+        // This extends only the open phase, not the distance or the animation.
+        endDelay = max(0.30, duration + 0.05)
         let speedGain = (0.85 + 0.4 * speed) / (0.85 + 0.4 * defaultSpeed)
-        pulses.append(.init(distance: distance * (gain * speedGain), start: time,
-                            duration: max(baseDuration, spacedDuration)))
+        pulses.append(.init(distance: distance * (gain * speedGain), start: time, duration: duration))
     }
 
     mutating func advance(to time: TimeInterval) -> SmoothedScrollingEngine.Emission? {
-        guard let lastInput else { return nil }
+        guard isRunning, let lastInput else { return nil }
         var delta = SIMD2<Double>.zero
         for index in pulses.indices {
             delta += pulses[index].advance(to: time)
@@ -598,9 +612,10 @@ private struct MirrorWheelMotion {
         }
         // A slow wheel turn remains one touch series. The easing already
         // settles the motion to zero, so no separate momentum swipe is needed.
-        if pulses.isEmpty, time - lastInput >= 0.30 {
-            self.lastInput = nil
-            lastAxis = nil
+        if pulses.isEmpty, time - lastInput >= endDelay {
+            // End the touch on time, but let the next wheel notch measure the
+            // physical interval even if the timer stopped between notches.
+            isRunning = false
             return .init(deltaX: 0, deltaY: 0, phase: .touchEnded)
         }
         return nil
