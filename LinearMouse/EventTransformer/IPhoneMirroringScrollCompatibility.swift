@@ -27,10 +27,14 @@ enum IPhoneMirroringScrollCompatibility {
     }
 
     static func recordInput(_ event: CGEvent, mode: String) {
-        os_log("Mirror wheel input mode=%{public}@ x=%{public}.3f y=%{public}.3f flags=%{public}llu",
+        os_log("Mirror wheel input mode=%{public}@ x=%{public}.3f y=%{public}.3f flags=%{public}llu continuous=%{public}lld phase=%{public}lld pointsY=%{public}lld linesY=%{public}lld",
                log: log, type: .info, mode,
                event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis2),
-               event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1), event.flags.rawValue)
+               event.getDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1), event.flags.rawValue,
+               event.getIntegerValueField(.scrollWheelEventIsContinuous),
+               event.getIntegerValueField(.scrollWheelEventScrollPhase),
+               event.getIntegerValueField(.scrollWheelEventPointDeltaAxis1),
+               event.getIntegerValueField(.scrollWheelEventDeltaAxis1))
     }
 
     static func makeRepostedEvent(from event: CGEvent, usesCanonicalPixelDeltas: Bool = false) -> CGEvent? {
@@ -111,6 +115,16 @@ enum IPhoneMirroringScrollCompatibility {
         // A reversal-only wheel keeps the source's timestamp and event data.
         repost.setIntegerValueField(.eventSourceUserData, value: repostedEventMarker)
         sink(repost, .cghidEventTap)
+        // A phase-only cancellation can bypass the smoothing timer. Record it
+        // at the same point as begin/change/end to make interrupted series visible.
+        if usesCanonicalPixelDeltas && repost.type == .scrollWheel {
+            os_log("Mirror HID post x=%{public}lld y=%{public}lld phase=%{public}lld momentum=%{public}lld",
+                   log: log, type: .info,
+                   repost.getIntegerValueField(.scrollWheelEventPointDeltaAxis2),
+                   repost.getIntegerValueField(.scrollWheelEventPointDeltaAxis1),
+                   repost.getIntegerValueField(.scrollWheelEventScrollPhase),
+                   repost.getIntegerValueField(.scrollWheelEventMomentumPhase))
+        }
         return true
     }
 

@@ -374,6 +374,8 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
         eventSink(event)
         updateSyntheticMomentumState(afterPosting: phase)
 
+        // Mirror frames are logged after the final event is rebuilt for HID delivery.
+        guard deliveryProfile == .standard else { return }
         os_log(
             "post smoothed scroll deltaX=%{public}.3f deltaY=%{public}.3f phase=%{public}@ momentum=%{public}@",
             log: Self.log,
@@ -542,6 +544,8 @@ private struct MirrorWheelMotion {
 
     private var pulses: [Pulse] = []
     private var lastInput: TimeInterval?
+    private var burstHasMultiplePackets = false
+    private var previousBurstGap: TimeInterval?
     private var endDelay: TimeInterval = 0.30
     private var lastAxis: Int?
     private var lastDirection = SIMD2<Double>.zero
@@ -592,7 +596,17 @@ private struct MirrorWheelMotion {
         // taper back to an isolated stroke instead of cutting at one interval.
         let longestGlide = min(2 * tail, 0.42)
         let spacedDuration = reverses ? 0 : min(1.10 * gap, longestGlide, 2 * longestGlide - gap)
-        let duration = max(baseDuration, spacedDuration)
+        // Some wheels send several packets 10–100 ms apart on each slow turn.
+        // The short spacing describes a single burst, not the rhythm of the hand.
+        let withinBurst = !reverses && gap < 0.12
+        if withinBurst {
+            burstHasMultiplePackets = true
+        } else {
+            previousBurstGap = !reverses && burstHasMultiplePackets && gap <= 0.70 ? gap : nil
+            burstHasMultiplePackets = false
+        }
+        let burstDuration = withinBurst ? min(previousBurstGap ?? 0, 2.5 * tail, 0.45) : 0
+        let duration = max(baseDuration, spacedDuration, burstDuration)
         // Leave room for the next physical notch to arrive slightly late.
         // This extends only the open phase, not the distance or the animation.
         endDelay = max(0.30, duration + 0.05)

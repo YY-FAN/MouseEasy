@@ -324,7 +324,8 @@ func steadyWheel(speed: Double?, usesMirrorWheelTuning: Bool, times: [Double],
             }
         })
     var nextDetent = 0
-    for frame in 1 ... 240 {
+    let lastTick = Int(ceil(((times.last ?? 0) + 1.5) / profile.timerInterval))
+    for frame in 1 ... lastTick {
         let tickTime = Double(frame) * profile.timerInterval
         while nextDetent < times.count && times[nextDetent] <= tickTime {
             now = times[nextDetent]
@@ -400,6 +401,82 @@ for profile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirror30Hz] {
                 "The final slow notch never ended")
     }
 }
+// Relative packet timings from two slow wheel turns. Each row is a burst;
+// the application switch between the turns is intentionally excluded.
+// Equal input amplitudes isolate timing from macOS wheel acceleration.
+let packetTurns: [[[Int]]] = [
+    [
+        [0, 23, 58, 93],
+        [581, 642, 681, 715, 815],
+        [1162, 1208, 1251],
+        [1704, 1808, 1835],
+        [2452, 2490, 2529, 2608],
+        [3202, 3235, 3264],
+        [3733, 3768, 3810, 3846],
+        [4286, 4311, 4329, 4356, 4438],
+        [4821, 4847, 4866, 4900],
+        [5319, 5334, 5353, 5373, 5388, 5463],
+    ],
+    [
+        [0, 25, 52, 95],
+        [596, 631, 658, 676, 712],
+        [1188, 1242, 1267, 1306],
+        [1717, 1751, 1779, 1815],
+        [2264, 2278, 2297, 2324],
+        [2692, 2717, 2745, 2761, 2806],
+        [3237, 3253, 3271, 3290, 3324],
+        [3705, 3729, 3757, 3773, 3798],
+        [4176, 4208, 4219, 4239, 4263],
+        [4622, 4650, 4658, 4677, 4693],
+        [5062, 5090, 5104, 5124, 5149],
+        [5529, 5552, 5563, 5585, 5606],
+        [5987, 6004, 6021, 6040, 6056, 6082],
+        [6434, 6450, 6469, 6490, 6505],
+        [6888, 6899, 6925, 6957, 6987],
+        [7540, 7548, 7566, 7582, 7604],
+        [7906, 7918, 7934, 7952],
+    ],
+]
+for profile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirror30Hz] {
+    for (turn, originalDistance) in zip(packetTurns, [2476.0, 4583.0]) {
+        let bursts = turn.map { $0.map { Double($0) / 1000 } }
+        let times = bursts.flatMap { $0 }
+        let replay = steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: times, profile: profile)
+        require(abs(detentDistance(replay) / originalDistance - 1) < 0.04,
+                "Burst smoothing changed the overall travel")
+        let moving = movingFrameTimes(replay)
+        var pauses: [Double] = []
+        for index in 2 ..< bursts.count {
+            let start = bursts[index][0]
+            let before = moving.last { $0 < start }!
+            let after = moving.first { $0 >= start }!
+            pauses.append(after - before)
+        }
+        let ordered = pauses.sorted()
+        let median = (ordered[(ordered.count - 1) / 2] + ordered[ordered.count / 2]) / 2
+        let longest = pauses.max()!
+        print("Packet replay at \(Int(1 / profile.timerInterval)) Hz: median gap \(Int((median * 1000).rounded())) ms, longest \(Int((longest * 1000).rounded())) ms, travel \(detentDistance(replay)) pt")
+        if median > 0.135 || longest > 0.27 {
+            timingFailures.append("Repeated groups leave long gaps at \(profile)")
+        }
+        let phases = replay.compactMap { ScrollWheelEventView($0.event).scrollPhase }
+        var open = false
+        for phase in phases {
+            if phase == .began {
+                require(!open, "Duplicate begin")
+                open = true
+            } else {
+                require(open, "Scroll phase without begin")
+            }
+            if phase == .ended || phase == .cancelled { open = false }
+        }
+        require(!open && moving.last! - times.last! <= 0.55, "Scroll did not settle after release")
+    }
+}
+let burstWithoutTail = packetTurns[0].flatMap { $0 }.map { Double($0) / 1000 }
+let stoppedBurst = steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: burstWithoutTail, tail: 0)
+require(movingFrameTimes(stoppedBurst).last! - burstWithoutTail.last! < 0.10,
+        "A burst extended scrolling after the user turned the tail off")
 let spaced = [0.0, 0.32, 0.64, 0.96]
 let noTail = steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: spaced, tail: 0)
 require(movingFrameTimes(noTail).last! - spaced.last! < 0.10, "Zero tail unexpectedly extended a notch")
