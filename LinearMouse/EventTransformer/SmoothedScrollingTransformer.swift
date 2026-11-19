@@ -114,7 +114,6 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
         }
 
         if handlesX || handlesY {
-            lastFlags = event.flags
             let input = SIMD2(handlesX ? delta.x : 0, handlesY ? delta.y : 0)
             let timestamp = now()
             if usesMirrorWheelTuning {
@@ -122,6 +121,10 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
                     endSyntheticGestureScrollSeriesIfNeeded(phase: .cancelled)
                     mirrorWheelMotion = MirrorWheelMotion()
                     delivery.resetPointDeltaRemainders()
+                } else if mirrorWheelMotion.followsPausedBurst(at: timestamp) {
+                    // Lift the synthetic contact between physical strokes while
+                    // preserving the pulses, subpixel carry and the running timer.
+                    post(emission: .init(deltaX: 0, deltaY: 0, phase: .touchEnded))
                 }
                 mirrorWheelMotion.feed(input, at: timestamp, tuning: smoothed.vertical ?? smoothed.horizontal)
             } else {
@@ -136,6 +139,7 @@ final class SmoothedScrollingTransformer: EventTransformer, Deactivatable {
                     wheelResolutionMultiplier: highResolutionWheelMultiplier(context) ?? 1
                 )
             }
+            lastFlags = event.flags
             startTimerIfNeeded()
         }
 
@@ -552,6 +556,13 @@ private struct MirrorWheelMotion {
 
     private(set) var isRunning = false
 
+    func followsPausedBurst(at time: TimeInterval) -> Bool {
+        // Wheel packets within the same burst are typically tens of milliseconds
+        // apart. Only separate an established burst after a clear pause.
+        guard isRunning, burstHasMultiplePackets, let lastInput else { return false }
+        return time - lastInput >= 0.25
+    }
+
     func changesAxis(to input: SIMD2<Double>) -> Bool {
         guard let current = Self.exclusiveAxis(of: input), let lastAxis else { return false }
         return lastAxis != current
@@ -624,8 +635,7 @@ private struct MirrorWheelMotion {
         if delta != .zero {
             return .init(deltaX: delta.x, deltaY: delta.y, phase: .touchChanged)
         }
-        // A slow wheel turn remains one touch series. The easing already
-        // settles the motion to zero, so no separate momentum swipe is needed.
+        // The final stroke settles to zero without a separate momentum swipe.
         if pulses.isEmpty, time - lastInput >= endDelay {
             // End the touch on time, but let the next wheel notch measure the
             // physical interval even if the timer stopped between notches.

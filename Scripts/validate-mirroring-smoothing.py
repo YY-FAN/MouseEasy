@@ -312,7 +312,7 @@ for deliveryProfile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirro
 // during one steady turn. Check the HID event stream across those gaps.
 let detentTimes = (0 ..< 8).map { Double($0) * 0.07 }
 func steadyWheel(speed: Double?, usesMirrorWheelTuning: Bool, times: [Double],
-                 fineInput: Double? = nil, dropsFrames: Bool = false, tail: Double? = nil,
+                 eventAtIndex: (Int) -> CGEvent = { _ in wheel(1) }, dropsFrames: Bool = false, tail: Double? = nil,
                  profile: SmoothedScrollingDeliveryProfile = .iPhoneMirroring) -> [(time: Double, event: CGEvent)] {
     let tuning = MirrorScrollSettings(speed: speed, duration: tail).tuning
     var now = 0.0
@@ -329,7 +329,7 @@ func steadyWheel(speed: Double?, usesMirrorWheelTuning: Bool, times: [Double],
         let tickTime = Double(frame) * profile.timerInterval
         while nextDetent < times.count && times[nextDetent] <= tickTime {
             now = times[nextDetent]
-            let event = fineInput.map { precisionWheel($0, horizontal: false) } ?? wheel(1)
+            let event = eventAtIndex(nextDetent)
             _ = transformer.transform(event, in: .init(device: nil))
             nextDetent += 1
         }
@@ -364,7 +364,7 @@ require(newCadence.last?.event.getIntegerValueField(phaseField) == Int64(CGScrol
         "Grouped detents did not end their swipe")
 print("Steady detents, old/new: gesture starts \(starts(oldCadence))/\(starts(newCadence)), largest moving-frame gap \(largestFrameGap(oldCadence))/\(largestFrameGap(newCadence)) s, distance \(oldDistance)/\(newDistance) points")
 
-let fineCadence = steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: detentTimes, fineInput: 4.5)
+let fineCadence = steadyWheel(speed: nil, usesMirrorWheelTuning: true, times: detentTimes, eventAtIndex: { _ in precisionWheel(4.5, horizontal: false) })
 for (index, start) in detentTimes.dropLast().enumerated() {
     let delta = detentDistance(fineCadence.filter { $0.time >= start && $0.time < detentTimes[index + 1] })
     require(delta >= 15, "A fine notch stopped moving during consecutive scrolling")
@@ -471,6 +471,40 @@ for profile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirror30Hz] {
             if phase == .ended || phase == .cancelled { open = false }
         }
         require(!open && moving.last! - times.last! <= 0.55, "Scroll did not settle after release")
+    }
+}
+// Reproduce the nine wheel bursts recorded while the mirror remained in front.
+// The logged line deltas are the axis values used by the discrete-wheel path.
+let observedBursts: [[(ms: Int, lines: Int32)]] = [
+    [(0, 1), (22, 1), (60, 2), (171, 2), (231, 3)],
+    [(617, 1), (652, 1), (690, 2), (748, 3)],
+    [(1184, 1), (1206, 1), (1247, 2), (1342, 2)],
+    [(1772, 1), (1796, 1), (1824, 2), (1923, 2)],
+    [(2336, 1), (2363, 1), (2392, 2), (2420, 3)],
+    [(2901, 1), (2921, 1), (2940, 2), (2996, 3)],
+    [(3454, 1), (3478, 1), (3518, 2)],
+    [(3946, 1), (4006, 1), (4050, 1)],
+    [(4588, 1), (4656, 1), (4721, 1)],
+]
+let observedPackets = observedBursts.flatMap { $0 }
+for profile in [SmoothedScrollingDeliveryProfile.iPhoneMirroring, .mirror30Hz] {
+    let replay = steadyWheel(speed: nil, usesMirrorWheelTuning: true,
+        times: observedPackets.map { Double($0.ms) / 1000 },
+        eventAtIndex: { wheel(-observedPackets[$0].lines) }, profile: profile)
+    let begins = replay.filter { ScrollWheelEventView($0.event).scrollPhase == .began }
+    let ends = replay.filter { ScrollWheelEventView($0.event).scrollPhase == .ended }
+    let longest = zip(begins, ends).map { $1.time - $0.time }.max() ?? 0
+    print("Observed bursts at \(Int(1/profile.timerInterval)) Hz: \(begins.count) strokes, longest \(Int((longest * 1000).rounded())) ms, travel \(detentDistance(replay)) pt")
+    if begins.count != observedBursts.count || ends.count != begins.count {
+        timingFailures.append("Separate wheel bursts were joined or left open")
+    }
+    for (burst, pair) in zip(observedBursts, zip(begins, ends)) {
+        let firstPacketTime = Double(burst[0].ms) / 1000
+        require(pair.0.time < pair.1.time, "Empty or unbalanced touch")
+        require(abs(ScrollWheelEventView(pair.1.event).deltaYPt) < 0.0001, "A touch end added motion")
+        if pair.0.time < firstPacketTime || pair.0.time > firstPacketTime + profile.timerInterval + 0.001 {
+            timingFailures.append("New stroke did not begin on the next moving frame")
+        }
     }
 }
 let burstWithoutTail = packetTurns[0].flatMap { $0 }.map { Double($0) / 1000 }
