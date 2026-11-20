@@ -20,15 +20,18 @@ struct EventTransformerContext {
 struct EventTransformerResolution {
     var transformer: EventTransformer
     var context: EventTransformerContext
+    var excludesApplication: Bool
     var didTransform: (() -> Void)?
 
     init(
         transformer: EventTransformer,
         context: EventTransformerContext,
+        excludesApplication: Bool = false,
         didTransform: (() -> Void)? = nil
     ) {
         self.transformer = transformer
         self.context = context
+        self.excludesApplication = excludesApplication
         self.didTransform = didTransform
     }
 

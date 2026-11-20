@@ -5,95 +5,46 @@ import AppKit
 import Combine
 import Foundation
 
-class AppPickerState: ObservableObject {
-    static let shared: AppPickerState = .init()
-
-    private let schemeState: SchemeState = .shared
-
-    @Published var installedApps: [InstalledApp] = []
-
-    private var runningAppSet: Set<String> {
-        Set(NSWorkspace.shared.runningApplications.map(\.bundleIdentifier).compactMap(\.self))
+extension AppTarget {
+    var displayName: String {
+        switch self {
+        case let .bundle(id): return (try? readInstalledApp(bundleIdentifier: id))?.bundleName ?? id
+        case let .executable(path): return URL(fileURLWithPath: path).lastPathComponent
+        case let .executableName(name): return name
+        }
     }
 
-    private var configuredAppSet: Set<String> {
-        Set(schemeState.targetSpecificSchemes.compactMap { $0.element.if?.first?.app })
+    var identifier: String {
+        switch self {
+        case let .bundle(id), let .executable(id), let .executableName(id): return id
+        }
     }
 
-    private var configuredExecutableSet: Set<String> {
-        Set(schemeState.targetSpecificSchemes.compactMap { $0.element.if?.first?.processPath })
-    }
-
-    var configuredApps: [InstalledApp] {
-        configuredAppSet
-            .map {
-                try? readInstalledApp(bundleIdentifier: $0) ??
-                    .init(
-                        bundleName: $0,
-                        bundleIdentifier: $0,
-                        bundleIcon: NSWorkspace.shared.icon(forFile: "")
-                    )
-            }
-            .compactMap(\.self)
-    }
-
-    var configuredExecutables: [String] {
-        Array(configuredExecutableSet).sorted()
-    }
-
-    private var configuredExecutableNameSet: Set<String> {
-        Set(schemeState.targetSpecificSchemes.compactMap { $0.element.if?.first?.processName })
-    }
-
-    var configuredExecutableNames: [String] {
-        Array(configuredExecutableNameSet).sorted()
-    }
-
-    var runningBundlelessProcesses: [String] {
-        let configuredExecutableNameSet = configuredExecutableNameSet
-        let names = NSWorkspace.shared
-            .runningApplications
-            .filter { $0.activationPolicy == .regular && $0.bundleIdentifier == nil }
-            .compactMap { $0.executableURL?.lastPathComponent }
-        return Array(Set(names))
-            .filter { !configuredExecutableNameSet.contains($0) }
-            .sorted()
-    }
-
-    var runningApps: [InstalledApp] {
-        let runningAppSet = runningAppSet
-        let configuredAppSet = configuredAppSet
-        return installedApps
-            .filter { runningAppSet.contains($0.bundleIdentifier) && !configuredAppSet.contains($0.bundleIdentifier) }
-    }
-
-    var otherApps: [InstalledApp] {
-        let runningAppSet = runningAppSet
-        let configuredAppSet = configuredAppSet
-        return installedApps
-            .filter { !runningAppSet.contains($0.bundleIdentifier) && !configuredAppSet.contains($0.bundleIdentifier) }
+    static func alphabetically(_ lhs: Self, _ rhs: Self) -> Bool {
+        let order = lhs.displayName.localizedStandardCompare(rhs.displayName)
+        return order == .orderedSame ? lhs.identifier < rhs.identifier : order == .orderedAscending
     }
 }
 
-extension AppPickerState {
+class AppPickerState: ObservableObject {
+    static let shared = AppPickerState()
+
+    @Published private(set) var installedApps: [InstalledApp] = []
+    @Published private(set) var runningTargets: [AppTarget] = []
+
     func refreshInstalledApps() {
-        installedApps = []
+        let running = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        runningTargets = Set(running.compactMap { app -> AppTarget? in
+            if let id = app.bundleIdentifier { return .bundle(id) }
+            return app.executableURL.map { .executableName($0.lastPathComponent) }
+        }).sorted(by: AppTarget.alphabetically)
 
-        var seenBundleIdentifiers = Set<String>()
-
-        let fileManager = FileManager.default
-        for appDirURL in fileManager.urls(for: .applicationDirectory, in: .allDomainsMask) {
-            let appURLs = (try? fileManager
-                .contentsOfDirectory(at: appDirURL, includingPropertiesForKeys: nil)
-            ) ?? []
-            for appURL in appURLs {
-                guard let installedApp = try? readInstalledApp(at: appURL),
-                      !seenBundleIdentifiers.contains(installedApp.bundleIdentifier) else {
-                    continue
-                }
-                installedApps.append(installedApp)
-                seenBundleIdentifiers.insert(installedApp.bundleIdentifier)
+        var apps: [String: InstalledApp] = [:]
+        for directory in FileManager.default.urls(for: .applicationDirectory, in: .allDomainsMask) {
+            for url in (try? FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)) ?? [] {
+                if let app = try? readInstalledApp(at: url) { apps[app.bundleIdentifier] = app }
             }
         }
+        installedApps = apps.values.sorted { $0.bundleName.localizedStandardCompare($1.bundleName) == .orderedAscending }
     }
 }

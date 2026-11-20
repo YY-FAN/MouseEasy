@@ -61,6 +61,7 @@ paths = [
     "LinearMouse/Utilities/CustomDecodingError.swift",
     "LinearMouse/Utilities/JSONCommentSanitizer.swift",
     "LinearMouse/Model/Configuration/Configuration.swift",
+    "LinearMouse/Model/AppTarget.swift",
     "LinearMouse/Model/Actions/CommonActionCatalog.swift",
     "LinearMouse/UI/ButtonsSettings/ButtonMappingsSection/ButtonMappingAction/KeyboardShortcutPresets.swift",
     "LinearMouse/Model/Configuration/Configuration+PortableMouseDefaults.swift",

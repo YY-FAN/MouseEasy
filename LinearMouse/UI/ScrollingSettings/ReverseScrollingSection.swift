@@ -8,13 +8,11 @@ extension ScrollingSettings {
         @ObservedObject private var state = ScrollingSettingsState.shared
 
         var body: some View {
-            SettingsToggleRow(
-                title: state.direction == .vertical ? NSLocalizedString("Reverse vertical scrolling", comment: "") : NSLocalizedString("Reverse horizontal scrolling", comment: ""),
-                subtitle: state.direction == .vertical
-                    ? NSLocalizedString("Change the vertical direction of the mouse wheel.", comment: "")
-                    : NSLocalizedString("Change horizontal scroll direction, including some navigation gestures.", comment: ""),
-                isOn: $state.reverseScrolling
-            )
+            Toggle("Reverse horizontal scrolling", isOn: $state.reverseHorizontalScrolling)
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .fixedSize()
+                .help(NSLocalizedString("Reverse horizontal scrolling. Some back and forward gestures may also change.", comment: ""))
         }
     }
 }

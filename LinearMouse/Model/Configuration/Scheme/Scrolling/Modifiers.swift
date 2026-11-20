@@ -1,6 +1,7 @@
 // MIT License
 // Copyright (c) 2021-2026 LinearMouse
 
+import CoreGraphics
 import Foundation
 
 extension Scheme.Scrolling {
@@ -9,6 +10,10 @@ extension Scheme.Scrolling {
         var shift: Action?
         var option: Action?
         var control: Action?
+
+        var keyedActions: [(CGEventFlags, Action?)] {
+            [(.maskCommand, command), (.maskShift, shift), (.maskAlternate, option), (.maskControl, control)]
+        }
     }
 }
 

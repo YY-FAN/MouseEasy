@@ -10,7 +10,7 @@ struct ConfigurationDiff {
     let current: Configuration
 
     var affectsEventTransformers: Bool {
-        previous?.mirrorScrolling != current.mirrorScrolling || changes { scheme in
+        previous?.excludedApps != current.excludedApps || previous?.mirrorScrolling != current.mirrorScrolling || changes { scheme in
             var result = Scheme(if: scheme.if)
             result.$scrolling = scheme.$scrolling
             result.$buttons = scheme.$buttons
@@ -25,7 +25,7 @@ struct ConfigurationDiff {
     }
 
     var affectsFocusFollowsMouse: Bool {
-        changes { scheme in
+        previous?.excludedApps != current.excludedApps || changes { scheme in
             var result = Scheme(if: scheme.if)
             result.pointer.focusFollowsMouse = scheme.pointer.focusFollowsMouse
             result.pointer.redirectsToScroll = scheme.pointer.redirectsToScroll

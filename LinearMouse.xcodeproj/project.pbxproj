@@ -463,6 +463,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = "$(LM_DEPLOYMENT_TARGET)";
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.yyfan.MouseWorkbench.dev.debug;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				SWIFT_OBJC_BRIDGING_HEADER = "LinearMouse/LinearMouse-Bridging-Header.h";

@@ -49,6 +49,13 @@ enum AccessibilityPermission {
         AXIsProcessTrusted()
     }
 
+    static var upgradeHint: String {
+        NSLocalizedString(
+            "If an update asks for permission again and MouseEasy is already listed, select the old entry and click the minus (−) button. Then drag in the updated app and turn on its switch.",
+            comment: "Help shown before and during drag-to-authorize after an update."
+        )
+    }
+
     static func check(completion: @escaping (Snapshot) -> Void) {
         // IOHIDCheckAccess performs blocking IPC to tccd. Never call it on the event thread.
         queue.async {

@@ -126,9 +126,14 @@ struct PermissionDragPanelView: View {
                 directionIcon
                     .foregroundColor(.accentColor)
                     .accessibility(hidden: true)
-                Text(verbatim: LinearMouse.brandedLocalization("Drag the LinearMouse icon below into the list above."))
-                    .font(.system(size: 13, weight: .medium))
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(verbatim: LinearMouse.brandedLocalization("Drag the LinearMouse icon below into the list above."))
+                        .font(.system(size: 13, weight: .medium))
+                    Text(verbatim: AccessibilityPermission.upgradeHint)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                .fixedSize(horizontal: false, vertical: true)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.trailing, 28)

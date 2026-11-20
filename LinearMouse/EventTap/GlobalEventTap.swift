@@ -61,7 +61,6 @@ class GlobalEventTap {
             if hoverFocusEnabled {
                 FocusFollowsMouseController.shared.observe(event)
             }
-            PointerLocationTriggerController.shared.handle(event)
             ModifierState.shared.update(with: event)
         }
 
@@ -81,6 +80,9 @@ class GlobalEventTap {
             withDisplay: ScreenManager.shared.currentScreenNameSnapshot
         )
         let wasMotion = event.type.isPointerMotion
+        if !wasMotion {
+            PointerLocationTriggerController.shared.handle(event, excluded: eventTransformerResolution.excludesApplication)
+        }
         let transformedEvent = eventTransformerResolution.transform(event)
         if wasMotion, hoverFocusEnabled {
             if let transformedEvent, transformedEvent.type == .mouseMoved {

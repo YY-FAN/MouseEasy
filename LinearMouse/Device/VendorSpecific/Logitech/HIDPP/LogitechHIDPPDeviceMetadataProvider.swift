@@ -4282,9 +4282,12 @@ final class LogitechReprogrammableControlsMonitor {
             let mouseLocation = CGEvent(source: nil)?.location ?? .zero
             let pid = mouseLocation.topmostWindowOwnerPid
                 ?? NSWorkspace.shared.frontmostApplication?.processIdentifier
-            let scheme = ConfigurationState.shared.configuration.matchScheme(
+            let configuration = ConfigurationState.shared.configuration
+            let process = pid?.processIdentity
+            if configuration.excludes(process) { return ([], false, nil) }
+            let scheme = configuration.matchScheme(
                 withDevice: device,
-                withPid: pid,
+                withProcess: process,
                 withDisplay: ScreenManager.shared.currentScreenNameSnapshot
             )
             return (

@@ -81,14 +81,8 @@ extension ModifierActionsTransformer: EventTransformer {
             return event
         }
 
-        let actions: [(CGEventFlags.Element, Action?)] = [
-            (.maskCommand, modifiers.command),
-            (.maskShift, modifiers.shift),
-            (.maskAlternate, modifiers.option),
-            (.maskControl, modifiers.control)
-        ]
         var event = event
-        for case let (flag, action) in actions where event.flags.contains(flag) {
+        for (flag, action) in modifiers.keyedActions where event.flags.contains(flag) {
             if let action, action != .auto {
                 guard let handledEvent = handleModifierKeyAction(for: event, action: action) else {
                     return nil

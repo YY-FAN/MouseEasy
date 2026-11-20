@@ -60,6 +60,7 @@ sources = [work / "Support.swift"]
 production = [
     "LinearMouse/Utilities/Codable/ImplicitOptional.swift",
     "LinearMouse/Model/Configuration/Scheme/Scrolling/Bidirectional.swift",
+    "LinearMouse/Model/Configuration/Scheme/Scrolling/Modifiers.swift",
     "LinearMouse/Model/Configuration/Scheme/Scrolling/Smoothed.swift",
     "LinearMouse/EventTransformer/SmoothedScrollingEngine.swift",
     "LinearMouse/EventTransformer/SmoothedScrollingDeliveryProfile.swift",
@@ -193,6 +194,302 @@ let nativeMirror = IPhoneMirroringScrollTransformer(preservesSourceEvent: true) 
     nativeFrames.append(event)
 }
 let mouseContext = EventTransformerContext(device: Device())
+let metadata: [CGEventField] = [.scrollWheelEventDeltaAxis2, .scrollWheelEventPointDeltaAxis2,
+    .scrollWheelEventFixedPtDeltaAxis2, .scrollWheelEventIsContinuous, .scrollWheelEventScrollCount,
+    .scrollWheelEventScrollPhase, .scrollWheelEventMomentumPhase, .eventSourceUserData]
+let wheelFields = metadata + [.scrollWheelEventDeltaAxis1, .scrollWheelEventFixedPtDeltaAxis1, .scrollWheelEventPointDeltaAxis1]
+let legacySystem = try JSONDecoder().decode(MirrorScrollSettings.self,
+    from: Data(#"{"wheelMode":"system","systemReverseVertical":true,"systemWheelDistance":2}"#.utf8))
+require(legacySystem.reversesSystemWheel && legacySystem.wheelMultiplier == 1, "Saved mirror reversal lost")
+require(MirrorScrollSettings(wheelMode: .system, repeatSystemWheel: true).wheelMultiplier == 2, "Build 34 boost lost")
+require(MirrorScrollSettings(wheelMode: .smooth, repeatSystemWheel: true).wheelMultiplier == 1, "Inactive boost leaked from legacy mode")
+require(MirrorScrollSettings(enabled: false, systemReverseVertical: true, systemWheelMultiplier: 3).wheelMultiplier == 1,
+        "Disabled mirror setting did not migrate to system defaults")
+require(!MirrorScrollSettings(enabled: false, systemReverseVertical: true).reversesSystemWheel, "Disabled reversal leaked")
+let systemDefault = IPhoneMirroringSystemWheelTransformer(settings: .init()) { _, _ in
+    preconditionFailure("A saved distance preference silently enabled extra events")
+}
+func hardwareWheel(_ y: Int32, x: Int32 = 0) -> CGEvent {
+    let event = wheel(y, x: x)
+    event.timestamp = 1234
+    event.flags = []
+    event.setIntegerValueField(.eventSourceUnixProcessID, value: 0)
+    return event
+}
+let original = hardwareWheel(2)
+let baseline = wheelFields.map(original.getDoubleValueField)
+require(systemDefault.transform(original, in: mouseContext) === original, "System baseline lost the original")
+require(baseline == wheelFields.map(original.getDoubleValueField), "System baseline changed original wheel fields")
+var extras = [CGEvent]()
+let systemRepeat = IPhoneMirroringSystemWheelTransformer(settings: .init(wheelMode: .system, repeatSystemWheel: true)) { copy, tap in
+    require(tap == .cghidEventTap, "Wrong delivery path")
+    extras.append(copy)
+}
+for delta: Int32 in [1, 1, -1, -2, 4, 0] {
+    let event = hardwareWheel(delta)
+    // Some high-resolution discrete input carries distance only in the precise field.
+    if delta == 0 { ScrollWheelEventView(event).deltaYFixedPt = -0.25 }
+    let before = wheelFields.map(event.getDoubleValueField)
+    let count = extras.count
+    require(systemRepeat.transform(event, in: mouseContext) === event, "Repeat swallowed the real event")
+    require(before == wheelFields.map(event.getDoubleValueField) && event.timestamp == 1234,
+            "Repeat changed the original input")
+    require(extras.count == count + 1, "Expected exactly one extra discrete event")
+    let copy = extras.last!
+    require(copy !== event && IPhoneMirroringScrollCompatibility.isReposted(copy) && copy.timestamp != event.timestamp,
+            "Extra event must be distinct and tagged")
+    let distanceAndPhase = wheelFields.filter { $0 != .eventSourceUserData }
+    require(distanceAndPhase.map(copy.getDoubleValueField) == distanceAndPhase.map(event.getDoubleValueField),
+            "Extra event changed distance, direction or gesture phases")
+    require(systemRepeat.transform(copy, in: mouseContext) === copy && extras.count == count + 1,
+            "Repeat generated feedback")
+}
+let countBeforeBypass = extras.count
+let trackpad = Device()
+trackpad.category = .trackpad
+let precise = hardwareWheel(1)
+ScrollWheelEventView(precise).continuous = true
+let otherApp = hardwareWheel(1)
+otherApp.setIntegerValueField(.eventSourceUnixProcessID, value: 501)
+let phaseOnlyWheel = hardwareWheel(1)
+ScrollWheelEventView(phaseOnlyWheel).scrollPhase = .ended
+let synthetic = hardwareWheel(1)
+synthetic.isLinearMouseSyntheticEvent = true
+let bypass = [hardwareWheel(0), hardwareWheel(1, x: 1), precise, otherApp, phaseOnlyWheel, synthetic]
+for event in bypass {
+    require(systemRepeat.transform(event, in: mouseContext) === event, "Ineligible input was consumed")
+}
+for modifier: CGEventFlags in [.maskShift, .maskControl, .maskCommand, .maskAlternate, .maskSecondaryFn] {
+    let event = hardwareWheel(1)
+    event.flags = modifier
+    _ = systemRepeat.transform(event, in: mouseContext)
+}
+_ = systemRepeat.transform(original, in: .init(device: trackpad))
+require(countBeforeBypass == extras.count, "Repeated a shortcut, trackpad, synthetic or non-vertical input")
+print("PASS: experimental mirror repeat leaves original intact, sends one marked discrete copy per input, bypasses other inputs and defaults off")
+// Mirror wheel routing bypasses the desktop modifier chain. Exercise the configured
+// bindings on the native route, both with default tuning and with reversal/boost on.
+let axisFields: [[CGEventField]] = [
+    [.scrollWheelEventDeltaAxis1, .scrollWheelEventFixedPtDeltaAxis1, .scrollWheelEventPointDeltaAxis1,
+     .scrollWheelEventRawDeltaAxis1, .scrollWheelEventAcceleratedDeltaAxis1],
+    [.scrollWheelEventDeltaAxis2, .scrollWheelEventFixedPtDeltaAxis2, .scrollWheelEventPointDeltaAxis2,
+     .scrollWheelEventRawDeltaAxis2, .scrollWheelEventAcceleratedDeltaAxis2]
+]
+let bindings = Scheme.Scrolling.Bidirectional<Scheme.Scrolling.Modifiers>(
+    vertical: .init(shift: .alterOrientation, option: .alterOrientation), horizontal: .init(control: .alterOrientation))
+let presetTunings = [false, true].flatMap { reverse in
+    MirrorScrollSettings.wheelMultipliers.map { MirrorScrollSettings(systemReverseVertical: reverse, systemWheelMultiplier: $0) }
+}
+for tuning in presetTunings {
+    let rate = tuning.wheelMultiplier
+    let switcher = IPhoneMirroringSystemWheelTransformer(settings: tuning, modifiers: bindings) { _, _ in
+        preconditionFailure("A modifier reposted a wheel event")
+    }
+    for (key, side, sourceAxis) in [(CGEventFlags.maskAlternate, NX_DEVICELALTKEYMASK, 0),
+                                    (.maskAlternate, NX_DEVICERALTKEYMASK, 0),
+                                    (.maskShift, NX_DEVICELSHIFTKEYMASK, 0),
+                                    (.maskControl, NX_DEVICERCTLKEYMASK, 1)] {
+        for sign in [-1.0, 1.0] {
+            let event = hardwareWheel(0)
+            event.flags = [.maskAlphaShift, key, .init(rawValue: UInt64(side))]
+            let values = [1.0, 0.75, 8, -1, -0.75].map { $0 * sign }
+            for (field, value) in zip(axisFields[sourceAxis], values) { event.setDoubleValueField(field, value: value) }
+            require(switcher.transform(event, in: mouseContext) === event, "Axis switch lost original hardware event")
+            require(event.flags == .maskAlphaShift && event.timestamp == 1234, "Shortcut changed unrelated metadata")
+            require(axisFields[sourceAxis].allSatisfy { event.getDoubleValueField($0) == 0 } &&
+                axisFields[1-sourceAxis].map(event.getDoubleValueField) == values.map { $0 * rate },
+                "Configured shortcut lost the selected speed or changed direction")
+            let native = NSEvent(cgEvent: event)!
+            require(sourceAxis == 0 ? native.scrollingDeltaX != 0 && native.scrollingDeltaY == 0 :
+                    native.scrollingDeltaY != 0 && native.scrollingDeltaX == 0, "AppKit received the wrong axis")
+        }
+    }
+    let fractional = hardwareWheel(0)
+    fractional.flags = .maskAlternate
+    fractional.setDoubleValueField(.scrollWheelEventRawDeltaAxis1, value: -0.125)
+    _ = switcher.transform(fractional, in: mouseContext)
+    require(fractional.getDoubleValueField(.scrollWheelEventRawDeltaAxis2) == -0.125 * rate &&
+        fractional.getDoubleValueField(.scrollWheelEventRawDeltaAxis1) == 0, "Raw-only wheel shortcut was lost")
+    let bypassCases: [(CGEvent, Device, CGEventFlags)] = [
+        (hardwareWheel(1), trackpad, .maskAlternate),
+        (hardwareWheel(1), mouseContext.device!, [.maskCommand, .maskAlternate]),
+        (hardwareWheel(1), mouseContext.device!, .maskControl),
+        (hardwareWheel(0, x: 1), mouseContext.device!, .maskAlternate),
+        (phaseOnlyWheel, mouseContext.device!, .maskAlternate),
+        (otherApp, mouseContext.device!, .maskAlternate)
+    ]
+    for (event, device, flags) in bypassCases {
+        event.flags = flags
+        let fields = axisFields.flatMap { $0 }
+        let initial = fields.map(event.getDoubleValueField)
+        require(switcher.transform(event, in: .init(device: device)) === event &&
+            event.flags == flags && fields.map(event.getDoubleValueField) == initial, "Ineligible shortcut changed the input")
+    }
+}
+// Exercise physical tilt as well as native Shift, where the receiver can still do the axis change.
+for rate in MirrorScrollSettings.wheelMultipliers + [1.25, 1.5] {
+    for reverse in [false, true] {
+        let tuning = MirrorScrollSettings(systemReverseVertical: reverse, systemWheelMultiplier: rate)
+        let stage = IPhoneMirroringSystemWheelTransformer(settings: tuning, modifiers: bindings) { _, _ in
+            preconditionFailure("Horizontal acceleration generated an extra event")
+        }
+        let native = IPhoneMirroringSystemWheelTransformer(settings: tuning) { _, _ in
+            preconditionFailure("Native Shift generated an extra event")
+        }
+        for (key, sourceAxis, outputAxis, handler) in [
+            (CGEventFlags(), 1, 1, stage), (.maskAlternate, 0, 1, stage),
+            (.maskShift, 0, 0, native), (.maskShift, 1, 1, native)
+        ] {
+            for direction in [-1.0, 1.0] {
+                var pointTotal = 0.0, lineTotal = 0.0
+                for _ in 0..<8 {
+                    let event = hardwareWheel(0)
+                    event.flags = key
+                    let values = [1.0, 0.75, 7, -2, -0.5].map { $0 * direction }
+                    for (field, value) in zip(axisFields[sourceAxis], values) { event.setDoubleValueField(field, value: value) }
+                    require(handler.transform(event, in: mouseContext) === event && event.timestamp == 1234,
+                            "Horizontal acceleration replaced the hardware event")
+                    let result = axisFields[outputAxis].map(event.getDoubleValueField)
+                    lineTotal += result[0]
+                    pointTotal += result[2]
+                    require(result[1] == values[1] * rate && result[3] == values[3] * rate && result[4] == values[4] * rate &&
+                        axisFields[1-outputAxis].allSatisfy { event.getDoubleValueField($0) == 0 }, "Unexpected horizontal speed or axis")
+                    require(event.flags == (handler === native ? key : []), "Changed native Shift or kept the mapped modifier")
+                }
+                require(lineTotal == direction * 8 * rate && pointTotal == direction * 56 * rate, "Lost fractional horizontal travel")
+            }
+        }
+    }
+}
+let ignoredShift = IPhoneMirroringSystemWheelTransformer(settings: .init(systemWheelMultiplier: 5),
+    modifiers: .init(vertical: .init(shift: .zoom))) { _, _ in preconditionFailure("Reposted a shortcut") }
+let zoomWheel = hardwareWheel(1)
+zoomWheel.flags = .maskShift
+let beforeZoom = axisFields[0].map(zoomWheel.getDoubleValueField)
+_ = ignoredShift.transform(zoomWheel, in: mouseContext)
+require(zoomWheel.flags == .maskShift && axisFields[0].map(zoomWheel.getDoubleValueField) == beforeZoom, "Accelerated a zoom shortcut")
+let tilted = hardwareWheel(0, x: 1)
+let coastingTilt = tilted.copy()!
+ScrollWheelEventView(coastingTilt).momentumPhase = .begin
+let markedTilt = tilted.copy()!
+markedTilt.setIntegerValueField(.eventSourceUserData, value: IPhoneMirroringScrollCompatibility.repostedEventMarker)
+for (event, device) in [(tilted, trackpad), (coastingTilt, mouseContext.device!), (markedTilt, mouseContext.device!)] {
+    let fields = axisFields.flatMap { $0 }
+    let before = fields.map(event.getDoubleValueField)
+    require(ignoredShift.transform(event, in: .init(device: device)) === event &&
+            fields.map(event.getDoubleValueField) == before, "Accelerated a trackpad, momentum or already handled tilt")
+}
+print("PASS: Option/Shift-to-horizontal and physical tilt receive mirror speed, 1x–5x, legacy fractional rates, both directions and vertical reversal states")
+// Count original pass-throughs and HID-path outputs in both directions.
+require(MirrorScrollSettings.wheelMultipliers == [1, 2, 3, 4, 5], "Mirror speed presets must be 1x through 5x")
+for rate in MirrorScrollSettings.wheelMultipliers + [1.25, 1.5] {
+    for reverse in [false, true] {
+        var posts = [CGEvent]()
+        let stage = IPhoneMirroringSystemWheelTransformer(settings:
+            .init(systemReverseVertical: reverse, systemWheelMultiplier: rate)) { event, tap in
+            require(tap == .cghidEventTap, "Mirror wheel left the HID path")
+            posts.append(event)
+        }
+        for direction: Int32 in [-1, 1] {
+            var outputCount = 0
+            var pointTotal = 0.0
+            var lineTotal: Int64 = 0
+            for _ in 0..<8 {
+                let event = hardwareWheel(2 * direction)
+                event.location = CGPoint(x: 60, y: 80)
+                event.setIntegerValueField(.scrollWheelEventScrollCount, value: 3)
+                let inputView = ScrollWheelEventView(event)
+                inputView.deltaYFixedPt = 0.75 * Double(direction)
+                inputView.deltaYPt = 7 * Double(direction)
+                event.setDoubleValueField(.scrollWheelEventRawDeltaAxis1, value: 1.25 * Double(direction))
+                event.setDoubleValueField(.scrollWheelEventAcceleratedDeltaAxis1, value: 33.75 * Double(direction))
+                let start = posts.count
+                let passthrough = stage.transform(event, in: mouseContext)
+                require(passthrough === event, "Lost the hardware event")
+                let added = Array(posts.dropFirst(start))
+                let delivered = added + (passthrough.map { [$0] } ?? [])
+                outputCount += delivered.count
+                for item in delivered {
+                    let factor = reverse ? -rate : 1
+                    let v = ScrollWheelEventView(item)
+                    lineTotal += v.deltaY
+                    pointTotal += v.deltaYPt
+                    require(abs(Double(v.deltaY) - factor * Double(2 * direction)) < 1 &&
+                        v.deltaYFixedPt == factor * 0.75 * Double(direction) &&
+                        abs(v.deltaYPt - factor * 7 * Double(direction)) < 1, "Wrong travel per wheel sample")
+                    require(item.getDoubleValueField(.scrollWheelEventRawDeltaAxis1) == factor * 1.25 * Double(direction) &&
+                        item.getDoubleValueField(.scrollWheelEventAcceleratedDeltaAxis1) == factor * 33.75 * Double(direction),
+                        "Raw or accelerated wheel travel was lost")
+                    require(v.deltaX == 0 && !v.continuous && v.scrollPhase == nil && v.momentumPhase == .none &&
+                        item.location == event.location && item.getIntegerValueField(.scrollWheelEventScrollCount) == 3,
+                        "Generated a gesture or changed the target")
+                }
+                for copy in added {
+                    let before = posts.count
+                    require(IPhoneMirroringScrollCompatibility.isReposted(copy) &&
+                        stage.transform(copy, in: mouseContext) === copy && posts.count == before, "Reposting loop")
+                }
+            }
+            require(outputCount == (reverse ? 8 : Int(8 * rate)), "Wrong wheel event count")
+            let signedRate = reverse ? -rate : rate
+            require(Double(lineTotal) == 16 * Double(direction) * signedRate &&
+                    pointTotal == 56 * Double(direction) * signedRate, "Fractional speed lost cumulative travel")
+        }
+        let before = posts.count
+        for event in bypass {
+            require(stage.transform(event, in: mouseContext) === event, "Bypassed input was replaced")
+        }
+        require(stage.transform(original, in: .init(device: trackpad)) === original && posts.count == before,
+                "Unexpected output for native gestures or trackpad")
+    }
+}
+print("PASS: system wheel, five rates, both directions, legacy settings, reverse retains the hardware event")
+// Hardware and logical scroll directions can disagree. Earlier tests used
+// matching signs for every field, so both UI settings could appear to pass.
+for rate in MirrorScrollSettings.wheelMultipliers {
+    for sign: Int32 in [-1, 1] {
+        for rawSign in [-1.0, 1.0] {
+            let input = hardwareWheel(sign)
+            let logical = Double(sign)
+            input.setDoubleValueField(.scrollWheelEventPointDeltaAxis1, value: logical * 10)
+            input.setDoubleValueField(.scrollWheelEventFixedPtDeltaAxis1, value: logical)
+            input.setDoubleValueField(.scrollWheelEventRawDeltaAxis1, value: rawSign * 2)
+            input.setDoubleValueField(.scrollWheelEventAcceleratedDeltaAxis1, value: rawSign * 9)
+            var outputs = [CGEvent]()
+            let stage = IPhoneMirroringSystemWheelTransformer(settings: .init(systemReverseVertical: true, systemWheelMultiplier: rate)) {
+                item, _ in outputs.append(item)
+            }
+            let fields: [CGEventField] = [.scrollWheelEventDeltaAxis1, .scrollWheelEventFixedPtDeltaAxis1,
+                    .scrollWheelEventPointDeltaAxis1, .scrollWheelEventRawDeltaAxis1, .scrollWheelEventAcceleratedDeltaAxis1]
+            let before = fields.map(input.getDoubleValueField)
+            require(stage.transform(input, in: mouseContext) === input && outputs.isEmpty, "Replaced physical input")
+            require(input.timestamp == 1234 && !IPhoneMirroringScrollCompatibility.isReposted(input), "Lost original metadata")
+            let wire: CGEvent
+            if #available(macOS 12, *) {
+                wire = CGEvent(withDataAllocator: nil, data: input.data!)!
+            } else {
+                wire = input
+            }
+            for (field, source) in zip(fields, before) {
+                let value = wire.getDoubleValueField(field)
+                require(value * source < 0 && abs(value + source * rate) < 1, "Native wheel direction or distance changed")
+            }
+        }
+    }
+}
+print("PASS: hardware event retained, five delta fields reverse in their own coordinates at five rates")
+var rawOnlyPosts = [CGEvent]()
+let rawOnlyStage = IPhoneMirroringSystemWheelTransformer(settings: .init(systemReverseVertical: true, systemWheelMultiplier: 3)) {
+    item, _ in rawOnlyPosts.append(item)
+}
+let rawOnlyWheel = hardwareWheel(0)
+rawOnlyWheel.setDoubleValueField(.scrollWheelEventRawDeltaAxis1, value: 0.25)
+require(rawOnlyStage.transform(rawOnlyWheel, in: mouseContext) === rawOnlyWheel &&
+        rawOnlyPosts.isEmpty && rawOnlyWheel.getDoubleValueField(.scrollWheelEventRawDeltaAxis1) == -0.75 &&
+        rawOnlyWheel.getDoubleValueField(.scrollWheelEventAcceleratedDeltaAxis1) == 0, "Raw-only input changed units")
+rawOnlyWheel.setDoubleValueField(.scrollWheelEventRawDeltaAxis2, value: 0.5)
+require(rawOnlyStage.transform(rawOnlyWheel, in: mouseContext) === rawOnlyWheel && rawOnlyPosts.isEmpty,
+        "Mixed axes must pass through intact")
 let reversedClick = ReverseScrollingTransformer(vertically: true).transform(wheel(1), in: mouseContext)!
 reversedClick.timestamp = 1234
 require(nativeMirror.transform(reversedClick, in: mouseContext) == nil && nativeFrames.count == 1,

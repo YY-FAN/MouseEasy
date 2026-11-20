@@ -18,6 +18,50 @@
         "$schema": {
           "type": "string"
         },
+        "excludedApps": {
+          "description": "Applications that use native input across all devices and displays, even when a matching scheme exists.",
+          "items": {
+            "anyOf": [
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "app": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "app"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "processPath": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "processPath"
+                ],
+                "type": "object"
+              },
+              {
+                "additionalProperties": false,
+                "properties": {
+                  "processName": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "processName"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "type": "array"
+        },
         "mirrorScrolling": {
           "additionalProperties": false,
           "description": "Independent mouse wheel tuning for the iPhone Mirroring app.",
@@ -39,14 +83,45 @@
               "description": "Legacy preference. Used when wheelMode is absent.",
               "type": "boolean"
             },
+            "repeatSystemWheel": {
+              "description": "Build 34: true in System wheel mode selects 2x when systemWheelMultiplier is absent.",
+              "type": "boolean"
+            },
             "response": {
               "type": "number"
             },
             "speed": {
               "type": "number"
             },
+            "systemReverseVertical": {
+              "description": "Reverse vertical mouse wheel input in iPhone Mirroring. Defaults to false.",
+              "type": "boolean"
+            },
+            "systemWheelDistance": {
+              "description": "Build 33 preference, retained for rollback.",
+              "enum": [
+                1,
+                1.25,
+                1.5,
+                2
+              ],
+              "type": "number"
+            },
+            "systemWheelMultiplier": {
+              "description": "Wheel speed in iPhone Mirroring, including horizontal scrolling with a modifier or a tilt wheel. Presets are 1x through 5x, with 1x as the default. Saved 1.25x and 1.5x settings are also supported.",
+              "enum": [
+                1,
+                1.25,
+                1.5,
+                2,
+                3,
+                4,
+                5
+              ],
+              "type": "number"
+            },
             "wheelMode": {
-              "description": "Smooth the wheel, apply reversal to the original wheel event, or pass system wheel input through.",
+              "description": "Legacy mode. Mirroring now always uses the system wheel.",
               "enum": [
                 "smooth",
                 "reversed",

@@ -327,7 +327,8 @@ enum SettingsTheme {
     }
     static let action = dynamic("Action", light: (0.188, 0.412, 0.322), dark: (0.580, 0.855, 0.722))
     static let actionText = dynamic("ActionText", light: (1.000, 1.000, 1.000), dark: (0.078, 0.173, 0.125))
-    static let windowBackground = dynamic("Canvas", light: (0.957, 0.965, 0.957), dark: (0.102, 0.125, 0.110))
+    static let tipText = Color(dynamic("TipText", light: (151 / 255, 105 / 255, 4 / 255), dark: (242 / 255, 196 / 255, 98 / 255)))
+    static let windowBackground = dynamic("Canvas", light: (1, 1, 1), dark: (0.102, 0.125, 0.110))
     static let canvas = Color(windowBackground)
     static let panel = Color(dynamic("Panel", light: (0.988, 0.992, 0.976), dark: (0.125, 0.173, 0.149)))
     static let sectionHeader = Color(dynamic("SectionHeader", light: (0.925, 0.954, 0.933), dark: (0.163, 0.232, 0.188)))

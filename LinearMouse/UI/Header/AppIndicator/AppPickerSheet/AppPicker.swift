@@ -4,165 +4,70 @@
 import SwiftUI
 
 struct AppPicker: View {
-    @ObservedObject var state: AppPickerState = .shared
+    @ObservedObject private var state = AppPickerState.shared
 
-    @Binding var selectedApp: AppTarget?
+    let title: LocalizedStringKey
+    let unavailable: Set<AppTarget>
+    var knownTargets: [AppTarget] = []
+    let choose: (AppTarget) -> Void
 
-    var pickerSelection: Binding<PickerSelection> {
-        Binding {
-            PickerSelection.value(selectedApp)
-        } set: { newValue in
-            switch newValue {
-            case let .value(value):
-                selectedApp = value
-
-            case .other:
-                selectedApp = nil
-
-                let panel = NSOpenPanel()
-                panel.allowsMultipleSelection = false
-                panel.canChooseDirectories = false
-                if #available(macOS 11.0, *) {
-                    panel.allowedContentTypes = [.applicationBundle]
-                }
-                guard panel.runModal() == .OK, let url = panel.url,
-                      let installedApp = try? readInstalledApp(at: url) else {
-                    return
-                }
-
-                selectedApp = .bundle(installedApp.bundleIdentifier)
-
-            case .otherExecutable:
-                selectedApp = nil
-
-                let panel = NSOpenPanel()
-                panel.allowsMultipleSelection = false
-                panel.canChooseDirectories = false
-                panel.allowsOtherFileTypes = true
-                panel.message = NSLocalizedString("Select an executable file", comment: "")
-                guard panel.runModal() == .OK, let url = panel.url else {
-                    return
-                }
-
-                selectedApp = .executable(url.path)
-            }
-        }
-    }
-
-    private var isSelectedAppInList: Bool {
-        switch selectedApp {
-        case .none:
-            return true
-
-        case let .bundle(bundleIdentifier):
-            return (state.configuredApps + state.installedApps)
-                .map(\.bundleIdentifier)
-                .contains(bundleIdentifier)
-
-        case let .executable(path):
-            return state.configuredExecutables.contains(path)
-
-        case let .executableName(name):
-            return state.configuredExecutableNames.contains(name)
-                || state.runningBundlelessProcesses.contains(name)
-        }
-    }
-
+    @ViewBuilder
     var body: some View {
-        Picker("Configure for", selection: pickerSelection) {
-            Text("All Apps").frame(minHeight: 24).tag(PickerSelection.value(nil))
+        if #available(macOS 11, *) {
+            Menu { choices } label: { Text(title) }.controlSize(.small).fixedSize()
+        } else {
+            MenuButton(label: Text(title)) { choices }.controlSize(.small).fixedSize()
+        }
+    }
 
-            Section(header: Text("Configured")) {
-                ForEach(state.configuredApps) { installedApp in
-                    AppPickerItem(installedApp: installedApp)
-                        .tag(PickerSelection.value(.bundle(installedApp.bundleIdentifier)))
-                }
-                ForEach(state.configuredExecutables, id: \.self) { path in
-                    ExecutablePickerItem(name: URL(fileURLWithPath: path).lastPathComponent)
-                        .tag(PickerSelection.value(.executable(path)))
-                }
-                ForEach(state.configuredExecutableNames, id: \.self) { name in
-                    ExecutablePickerItem(name: name)
-                        .tag(PickerSelection.value(.executableName(name)))
+    @ViewBuilder
+    private var choices: some View {
+        let known = knownTargets.filter { !unavailable.contains($0) }
+        if !known.isEmpty {
+            Section(header: Text("Apps with custom settings")) {
+                ForEach(known, id: \.self) { app in
+                    Button(action: { choose(app) }) { Text(verbatim: app.displayName) }
                 }
             }
-
+        }
+        let blocked = unavailable.union(known)
+        let running = state.runningTargets.filter { !blocked.contains($0) }
+        if !running.isEmpty {
             Section(header: Text("Running")) {
-                ForEach(state.runningApps) { installedApp in
-                    AppPickerItem(installedApp: installedApp)
-                        .tag(PickerSelection.value(.bundle(installedApp.bundleIdentifier)))
+                ForEach(running, id: \.self) { app in
+                    Button(action: { choose(app) }) { Text(verbatim: app.displayName) }
                 }
-                ForEach(state.runningBundlelessProcesses, id: \.self) { name in
-                    ExecutablePickerItem(name: name)
-                        .tag(PickerSelection.value(.executableName(name)))
-                }
-            }
-
-            Section(header: Text("Installed")) {
-                ForEach(state.otherApps) { installedApp in
-                    AppPickerItem(installedApp: installedApp)
-                        .tag(PickerSelection.value(.bundle(installedApp.bundleIdentifier)))
-                }
-            }
-
-            if !isSelectedAppInList {
-                switch selectedApp {
-                case .none:
-                    EmptyView()
-
-                case let .bundle(bundleIdentifier):
-                    if let installedApp = try? readInstalledApp(bundleIdentifier: bundleIdentifier) {
-                        AppPickerItem(installedApp: installedApp)
-                            .tag(PickerSelection.value(selectedApp))
-                    }
-
-                case let .executable(path):
-                    ExecutablePickerItem(name: URL(fileURLWithPath: path).lastPathComponent)
-                        .tag(PickerSelection.value(selectedApp))
-
-                case let .executableName(name):
-                    ExecutablePickerItem(name: name)
-                        .tag(PickerSelection.value(selectedApp))
-                }
-            }
-
-            Text("Other App…").tag(PickerSelection.other)
-            Text("Other Executable…").tag(PickerSelection.otherExecutable)
-        }
-        .onAppear {
-            DispatchQueue.main.async {
-                state.refreshInstalledApps()
             }
         }
+        let alreadyListed = blocked.union(running)
+        Section(header: Text("Installed")) {
+            ForEach(state.installedApps.filter { !alreadyListed.contains(.bundle($0.bundleIdentifier)) }) { app in
+                Button(action: { choose(.bundle(app.bundleIdentifier)) }) { Text(verbatim: app.bundleName) }
+            }
+        }
+        Divider()
+        Button("Other App…") { browse(executable: false) }
+        Button("Other Executable…") { browse(executable: true) }
     }
-}
 
-enum PickerSelection: Hashable {
-    case value(AppTarget?)
-    case other
-    case otherExecutable
-}
-
-struct AppPickerItem: View {
-    var installedApp: InstalledApp
-
-    var body: some View {
-        HStack(spacing: 8) {
-            Image(nsImage: installedApp.bundleIcon)
-            Text(installedApp.bundleName)
+    private func browse(executable: Bool) {
+        let panel = NSOpenPanel()
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        if executable {
+            panel.message = NSLocalizedString("Select an executable file", comment: "")
+        } else if #available(macOS 11.0, *) {
+            panel.allowedContentTypes = [.applicationBundle]
         }
-    }
-}
-
-struct ExecutablePickerItem: View {
-    var name: String
-
-    var body: some View {
-        HStack(spacing: 8) {
-            if #available(macOS 11.0, *) {
-                Image(systemName: "terminal")
-            }
-            Text(name)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let target: AppTarget
+        if executable {
+            target = .executable(url.path)
+        } else if let app = try? readInstalledApp(at: url) {
+            target = .bundle(app.bundleIdentifier)
+        } else {
+            return
         }
+        if !unavailable.contains(target) { choose(target) }
     }
 }

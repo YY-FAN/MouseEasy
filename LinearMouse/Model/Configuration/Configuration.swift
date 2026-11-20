@@ -9,11 +9,13 @@ struct Configuration: Codable, Equatable {
     let jsonSchema = AppIdentity.configurationSchemaURL
 
     var mirrorScrolling: MirrorScrollSettings?
+    var excludedApps: [AppTarget]?
     var schemes: [Scheme] = []
 
     enum CodingKeys: String, CodingKey {
         case jsonSchema = "$schema"
         case mirrorScrolling
+        case excludedApps
         case schemes
     }
 
@@ -59,7 +61,7 @@ extension Configuration.ConfigurationError: LocalizedError {
 
 extension Configuration {
     var usesProcessConditions: Bool {
-        schemes.contains { scheme in
+        excludedApps?.isEmpty == false || schemes.contains { scheme in
             scheme.if?.contains { condition in
                 condition.app != nil ||
                     condition.parentApp != nil ||
@@ -147,6 +149,7 @@ extension Configuration {
         var mergedScheme = Scheme()
         mergedScheme.if = [Scheme.If(matchContext: context)]
 
+        if excludedApps?.contains(where: { $0.matches(context) }) == true { return mergedScheme }
         for scheme in schemes where scheme.isActive(in: context) {
             scheme.merge(into: &mergedScheme)
         }
@@ -215,14 +218,20 @@ extension Configuration {
         withProcess process: ProcessIdentity? = nil,
         withDisplay display: String? = nil
     ) -> Scheme {
-        matchScheme(
-            withDevice: device,
-            withApp: process?.bundleIdentifier,
-            withParentApp: process?.parent?.bundleIdentifier,
-            withGroupApp: process?.group?.bundleIdentifier,
-            withDisplay: display,
-            withProcessName: process?.processName,
-            withProcessPath: process?.processPath
-        )
+        matchScheme(in: Scheme.MatchContext(device: device, process: process, display: display))
+    }
+
+    func excludes(_ process: ProcessIdentity?) -> Bool {
+        guard let excludedApps, !excludedApps.isEmpty, let process else { return false }
+        let context = Scheme.MatchContext(device: nil, process: process, display: nil)
+        return excludedApps.contains { $0.matches(context) }
+    }
+}
+
+private extension Scheme.MatchContext {
+    init(device: Device?, process: ProcessIdentity?, display: String?) {
+        self.init(device: device, app: process?.bundleIdentifier, parentApp: process?.parent?.bundleIdentifier,
+                  groupApp: process?.group?.bundleIdentifier, display: display, processName: process?.processName,
+                  processPath: process?.processPath)
     }
 }

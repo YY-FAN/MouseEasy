@@ -13,17 +13,9 @@ extension ScrollingSettings {
             SettingsControlRow(title: NSLocalizedString("Scroll direction", comment: "")) {
                 DirectionPicker(direction: $state.direction)
                     .frame(width: pairedControlWidth, alignment: .leading)
-                HStack(spacing: 8) {
-                    Text("Reverse direction").fixedSize()
-                    Toggle("Reverse direction", isOn: $state.reverseScrolling)
-                        .labelsHidden()
-                        .toggleStyle(.switch)
-                        .controlSize(.small)
-                        .fixedSize()
+                if state.direction == .horizontal {
+                    ReverseScrollingSection()
                 }
-                .help(state.direction == .vertical
-                    ? NSLocalizedString("Reverse vertical wheel movement.", comment: "")
-                    : NSLocalizedString("Reverse horizontal scrolling. Some back and forward gestures may also change.", comment: ""))
             }
         }
     }

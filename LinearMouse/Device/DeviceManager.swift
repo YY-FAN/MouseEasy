@@ -798,6 +798,12 @@ class DeviceManager: ObservableObject {
                 application?.bundleIdentifier ?? "(nil)"
             )
             self?.updatePointerSpeed()
+            if ConfigurationState.shared.configuration.excludedApps?.isEmpty == false {
+                if let pid = application?.processIdentifier {
+                    EventTransformerManager.shared.frontmostApplicationChanged(to: pid)
+                }
+                self?.updateLogitechDeviceSettings()
+            }
         }
 
         updatePointerSpeed()
@@ -957,9 +963,13 @@ class DeviceManager: ObservableObject {
             return
         }
 
-        let scheme = ConfigurationState.shared.configuration.matchScheme(
+        let configuration = ConfigurationState.shared.configuration
+        let process = NSWorkspace.shared.frontmostApplication?.processIdentifier.processIdentity
+        device.setInputSettingsSuspended(configuration.excludes(process))
+        guard !device.inputSettingsSuspended else { return }
+        let scheme = configuration.matchScheme(
             withDevice: device,
-            withPid: NSWorkspace.shared.frontmostApplication?.processIdentifier,
+            withProcess: process,
             withDisplay: ScreenManager.shared
                 .currentScreenName
         )
@@ -990,7 +1000,12 @@ class DeviceManager: ObservableObject {
     /// Hardware settings of the physical device, overridden by those of the
     /// device behind it that is currently in use.
     private func configuredLogitechScheme(for device: Device) -> Scheme {
-        let schemes = ConfigurationState.shared.configuration.schemes
+        let configuration = ConfigurationState.shared.configuration
+        if configuration.excludedApps?.isEmpty == false,
+           configuration.excludes(NSWorkspace.shared.frontmostApplication?.processIdentifier.processIdentity) {
+            return Scheme()
+        }
+        let schemes = configuration.schemes
         var mergedScheme = Scheme()
         for matcher in DeviceMatcher.candidates(of: device).reversed() {
             guard case let .at(index) = schemes.schemeIndex(

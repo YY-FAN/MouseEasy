@@ -38,12 +38,15 @@ struct AccessibilityPermissionView: View {
             primaryButton
                 .padding(.top, 24)
             if !eventTapFailed {
-                Text("Find MouseEasy in System Settings and turn on its switch.")
-                    .font(.system(size: 12))
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.top, 12)
+                VStack(spacing: 6) {
+                    Text("Find MouseEasy in System Settings and turn on its switch.")
+                    Text(verbatim: AccessibilityPermission.upgradeHint)
+                }
+                .font(.system(size: 12))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 12)
             }
             helpLink
                 .font(.system(size: 15))

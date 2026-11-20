@@ -19,6 +19,9 @@ import subprocess
 import sys
 import time
 import tarfile
+import tempfile
+
+from PackageDMG import build_installer
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -207,20 +210,9 @@ def package_localizations(resources):
         info_path.write_bytes(plistlib.dumps(info, fmt=plistlib.FMT_BINARY))
 
 
-def package(official, executable, libs, *, preview=False):
+def assemble(official, executable, libs, app, *, preview):
     display_name = f"{DISPLAY_NAME} Preview" if preview else DISPLAY_NAME
     bundle_id = BUNDLE_ID + ".preview" if preview else BUNDLE_ID
-    output = APP.with_name(f"{display_name}.app")
-    # Keep signed build products out of the same app index as /Applications.
-    app = WORK / "products.noindex" / output.name
-    archives = WORK / "archives.noindex"
-    archives.mkdir(exist_ok=True)
-    previous_name = "previous-preview" if preview else "previous-build"
-    if output.is_symlink() and output.resolve() != app:
-        raise RuntimeError(f"Unexpected application link: {output}")
-    for prior in ([app] if output.is_symlink() else [output, app]):
-        if prior.exists():
-            prior.rename(archives / f"{previous_name}-{time.time_ns()}.app.saved")
     contents = app / "Contents"
     (contents / "MacOS").mkdir(parents=True)
     run(["ditto", official / "Contents/Resources", contents / "Resources"])
@@ -331,10 +323,48 @@ def package(official, executable, libs, *, preview=False):
               "configurationSchemaSHA256": hashlib.sha256((contents / "Resources/Configuration.json").read_bytes()).hexdigest(),
               "upstreamUpdateFeedPresent": "SUFeedURL" in info, "deepCodeSignatureVerified": True,
               "runtimeStarted": False}
-    (WORK / ("preview-report.json" if preview else "build-report.json")).write_text(json.dumps(report, ensure_ascii=False, indent=2) + "\n")
-    if not output.is_symlink():
-        output.symlink_to(app.relative_to(output.parent), target_is_directory=True)
-    print(f"APP: {output}", flush=True)
+    return report
+
+
+def package(official, executable, libs, *, preview=False):
+    display_name = f"{DISPLAY_NAME} Preview" if preview else DISPLAY_NAME
+    output = APP.with_name(f"{display_name}.app")
+    old_product = WORK / "products.noindex" / output.name
+    if output.is_symlink() and output.resolve() != old_product:
+        raise RuntimeError(f"Unexpected application link: {output}")
+
+    def archive_product(path):
+        if path.exists():
+            archives = WORK / "archives.noindex"
+            archives.mkdir(exist_ok=True)
+            path.rename(archives / f"{display_name}-{time.time_ns()}.app.saved")
+
+    if preview:
+        if not output.is_symlink():
+            archive_product(output)
+        archive_product(old_product)
+        report = assemble(official, executable, libs, old_product, preview=True)
+        if not output.is_symlink():
+            output.symlink_to(old_product.relative_to(output.parent), target_is_directory=True)
+    else:
+        # A mounted image or a build folder must never offer another launchable
+        # copy of the installed release identity.
+        with tempfile.TemporaryDirectory(suffix=".noindex") as staging:
+            app = Path(staging) / "payload" / output.name
+            report = assemble(official, executable, libs, app, preview=False)
+            installer = APP.with_suffix(".pkg")
+            build_installer(app, installer)
+        if output.is_symlink():
+            output.unlink()
+        else:
+            archive_product(output)
+        archive_product(old_product)
+        report.pop("app")
+        report["installer"] = str(installer)
+        output = installer
+    (WORK / ("preview-report.json" if preview else "build-report.json")).write_text(
+        json.dumps(report, ensure_ascii=False, indent=2) + "\n")
+    print(output, flush=True)
 
 
 def main():

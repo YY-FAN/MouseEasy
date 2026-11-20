@@ -14,8 +14,8 @@ final class PointerLocationTriggerController {
 
     private init() {}
 
-    func handle(_ event: CGEvent) {
-        guard Defaults[.showPointerLocation],
+    func handle(_ event: CGEvent, excluded: Bool = false) {
+        guard !excluded, Defaults[.showPointerLocation],
               !event.isLinearMouseSyntheticEvent else {
             trigger.reset()
             return

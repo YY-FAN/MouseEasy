@@ -42,3 +42,6 @@ node_modules
 # Recreated from Branding/WheelEase.svg by GenerateWheelEaseIcon.swift.
 Branding/Generated/WheelEase.iconset/
 Branding/Generated/*.png
+
+# Local Python build helpers
+__pycache__/

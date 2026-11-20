@@ -39,6 +39,18 @@ struct PointerSettings: View {
             SettingsToggleRow(title: NSLocalizedString("Disable pointer acceleration", comment: ""), isOn: $state.pointerDisableAcceleration, fillsRow: true)
             Button("Restore system defaults", action: state.revertPointerSpeed)
                 .buttonStyle(SettingsSecondaryButtonStyle())
+            Divider()
+            SettingsDisclosure(title: NSLocalizedString("About pointer settings", comment: "")) {
+                Text("Move the mouse the same distance, first slowly, then quickly. If the pointer goes too far both times, lower Pointer speed. If it overshoots only on the fast movement, lower Pointer acceleration.")
+                Text("To tune sensitivity manually, start with acceleration at 0 and adjust Pointer speed. For consistent pointer travel regardless of how fast you move, turn on Disable pointer acceleration.")
+                if #available(macOS 14, *) {
+                    Text("With acceleration off, use Tracking speed to adjust pointer travel on supported devices.")
+                }
+                Text("Restore system defaults resets pointer speed and acceleration for the selected scope.")
+                if state.showsPointerSpeedLimitationNotice {
+                    Text("On some Apple mice and trackpads, the Pointer speed slider may have little or no effect. Try adjusting tracking speed for the device in System Settings.")
+                }
+            }
         }
     }
 
@@ -61,18 +73,6 @@ struct PointerSettings: View {
                 Divider()
                 pointerRedirectsToScrollControl
             }
-
-            HStack(spacing: 12) {
-                Button("About pointer settings") {
-                    NSWorkspace.shared.open(URL(string: "https://go.linearmouse.app/disable-pointer-acceleration-and-speed")!)
-                }
-                if state.showsPointerSpeedLimitationNotice {
-                    Button("About device speed limits") {
-                        NSWorkspace.shared.open(URL(string: "https://go.linearmouse.app/pointer-speed-limitations")!)
-                    }
-                }
-            }
-            .buttonStyle(SettingsSecondaryButtonStyle())
         }
     }
 

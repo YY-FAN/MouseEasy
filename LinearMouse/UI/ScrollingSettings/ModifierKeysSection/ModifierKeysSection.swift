@@ -9,17 +9,9 @@ extension ScrollingSettings {
 
         @State private var direction: Scheme.Scrolling.BidirectionalDirection = .vertical
 
-        private var actions: Binding<Scheme.Scrolling.Modifiers> {
-            let axis = direction
-            return Binding(
-                get: { state.mergedScheme.scrolling.modifiers[axis] ?? .init() },
-                set: { state.scheme.scrolling.modifiers[axis] = $0 }
-            )
-        }
-
         var body: some View {
             SettingsCard(
-                title: NSLocalizedString("Wheel shortcuts", comment: ""),
+                title: NSLocalizedString("Wheel behavior with modifier keys", comment: ""),
                 symbol: "keyboard",
                 headerAccessory: AnyView(
                     DirectionPicker(direction: $direction)
@@ -29,10 +21,10 @@ extension ScrollingSettings {
                 )
             ) {
                 VStack(alignment: .leading, spacing: 4) {
-                    ModifierKeyActionPicker(label: "⌃ Ctrl", action: actions.control)
-                    ModifierKeyActionPicker(label: "⇧ Shift", action: actions.shift)
-                    ModifierKeyActionPicker(label: "⌥ Option", action: actions.option)
-                    ModifierKeyActionPicker(label: "⌘ Cmd", action: actions.command)
+                    ForEach(WheelModifierKey.all, id: \.self) { key in
+                        ModifierKeyActionPicker(label: key.label, direction: direction,
+                                                action: state.modifierActions(for: direction)[dynamicMember: key.action])
+                    }
                 }
                 Divider()
                 SettingsDisclosure(title: NSLocalizedString("Record other scroll hotkeys", comment: "")) {

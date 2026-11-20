@@ -1,6 +1,248 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
+    "Open PayPal" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "打开 PayPal"
+          }
+        }
+      }
+    },
+    "PayPal account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "PayPal 账号"
+          }
+        }
+      }
+    },
+    "Copy account" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "复制账号"
+          }
+        }
+      }
+    },
+    "Copied" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已复制"
+          }
+        }
+      }
+    },
+    "Remove app settings?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除单独设置？"
+          }
+        }
+      }
+    },
+    "Remove settings for %@ for the current device and display?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除“%@”在当前设备和显示器下的单独设置？"
+          }
+        }
+      }
+    },
+    "Remove app settings…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除单独设置…"
+          }
+        }
+      }
+    },
+    "Remove exception" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移出例外"
+          }
+        }
+      }
+    },
+    "Scroll horizontally" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改为横向滚动"
+          }
+        }
+      }
+    },
+    "Scroll vertically" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "改为纵向滚动"
+          }
+        }
+      }
+    },
+    "Set defaults for apps. An app’s own settings take priority." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在这里设置通用默认值。应用有单独设置时，优先使用该应用的设置。"
+          }
+        }
+      }
+    },
+    "Apps with custom settings" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "已单独设置的应用"
+          }
+        }
+      }
+    },
+    "Choose an app to edit its settings for the current device and display." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "选中应用并确认后，可在当前设备和显示器范围内调整它的设置。"
+          }
+        }
+      }
+    },
+    "Add app…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加应用…"
+          }
+        }
+      }
+    },
+    "No apps have custom settings yet." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无单独设置的应用。"
+          }
+        }
+      }
+    },
+    "Exceptions" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "例外"
+          }
+        }
+      }
+    },
+    "Add exception…" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "添加例外…"
+          }
+        }
+      }
+    },
+    "MouseEasy pauses all input settings in these apps. Removing an exception restores the app’s previous settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在这些应用中暂停所有 MouseEasy 输入设置。移出例外后，原有设置会恢复。"
+          }
+        }
+      }
+    },
+    "No exceptions." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "暂无例外。"
+          }
+        }
+      }
+    },
+    "Remove" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除"
+          }
+        }
+      }
+    },
+    "Not selected" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "未选择"
+          }
+        }
+      }
+    },
+    "Remove the selected app’s settings for the current device and display?" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "移除该应用在当前设备和显示器范围内的单独设置？"
+          }
+        }
+      }
+    },
     "Reopen MouseEasy from Applications to return to settings." : {
       "localizations" : {
         "zh-Hans" : {
@@ -66,13 +308,57 @@
         }
       }
     },
-    "About device speed limits" : {
+    "Move the mouse the same distance, first slowly, then quickly. If the pointer goes too far both times, lower Pointer speed. If it overshoots only on the fast movement, lower Pointer acceleration." : {
       "extractionState" : "manual",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "设备速度调节说明"
+            "value" : "把鼠标慢慢挪一小段，再快速挪同样的距离。如果两次指针都移得太远，调低「指针速度」。如果只有快移时容易越过目标，调低「指针加速度」。"
+          }
+        }
+      }
+    },
+    "To tune sensitivity manually, start with acceleration at 0 and adjust Pointer speed. For consistent pointer travel regardless of how fast you move, turn on Disable pointer acceleration." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "想手动调灵敏度，可以先把加速度设为 0，再调「指针速度」。如果希望快移和慢移同样的距离时，指针也走同样远，打开「禁用指针加速度」。"
+          }
+        }
+      }
+    },
+    "With acceleration off, use Tracking speed to adjust pointer travel on supported devices." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "关闭加速度后，支持此功能的设备仍可通过「跟踪速度」调整指针移动的距离。"
+          }
+        }
+      }
+    },
+    "Restore system defaults resets pointer speed and acceleration for the selected scope." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "「恢复系统默认」会重置当前适用范围的指针速度和加速度。"
+          }
+        }
+      }
+    },
+    "On some Apple mice and trackpads, the Pointer speed slider may have little or no effect. Try adjusting tracking speed for the device in System Settings." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "部分 Apple 鼠标和触控板调节「指针速度」后变化很小或没有变化。遇到这种情况，可以在「系统设置」中调整该设备的跟踪速度。"
           }
         }
       }
@@ -184,28 +470,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "调整每次拨轮的移动距离。"
-          }
-        }
-      }
-    },
-    "Afdian" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "爱发电"
-          }
-        }
-      }
-    },
-    "After choosing an app, return here to change its settings." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "确认选择后，回到当前页面修改该应用的设置。"
           }
         }
       }
@@ -1002,13 +1266,13 @@
         }
       }
     },
-    "Enable Shift for horizontal scrolling" : {
+    "Unassigned" : {
       "extractionState" : "manual",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "启用 Shift 横向滚动"
+            "value" : "未指定"
           }
         }
       }
@@ -1152,6 +1416,23 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "在系统设置的列表中找到 MouseEasy，并打开右侧开关。"
+          }
+        }
+      }
+    },
+    "If an update asks for permission again and MouseEasy is already listed, select the old entry and click the minus (−) button. Then drag in the updated app and turn on its switch." : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If an update asks for permission again and MouseEasy is already listed, select the old entry and click the minus (−) button. Then drag in the updated app and turn on its switch."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "升级后若仍提示授权，且列表里已有 MouseEasy，请选中旧条目，点「−」移除，再拖入新版图标并打开开关。"
           }
         }
       }
@@ -1442,13 +1723,13 @@
         }
       }
     },
-    "Hold Shift while scrolling to switch axis." : {
+    "Hold a modifier to scroll horizontally" : {
       "extractionState" : "manual",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "把 Shift 配合滚轮的操作设为切换方向。"
+            "value" : "按住修饰键横向滚动"
           }
         }
       }
@@ -2300,17 +2581,6 @@
         }
       }
     },
-    "Open tip page" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打开打赏页面"
-          }
-        }
-      }
-    },
     "Open with" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -2834,7 +3104,7 @@
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "反转横向滚动"
+            "value" : "反转横向"
           }
         }
       }
@@ -2861,13 +3131,13 @@
         }
       }
     },
-    "Reverse only keeps the original wheel events and reversal. System wheel uses the macOS scroll direction." : {
+    "Reverse only follows your wheel direction setting. System wheel uses the macOS direction." : {
       "extractionState" : "manual",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "仅反向使用原鼠标事件并保留反向设置。系统滚轮交由 macOS 处理，使用系统滚动方向。"
+            "value" : "「仅反向」沿用滚轮方向设置。「系统滚轮」使用 macOS 的滚动方向。"
           }
         }
       }
@@ -3587,17 +3857,6 @@
         }
       }
     },
-    "This method is not available yet." : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "此方式暂未开通。"
-          }
-        }
-      }
-    },
     "This mouse has no settings of its own. Select a configured mouse." : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3627,28 +3886,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "打赏"
-          }
-        }
-      }
-    },
-    "Tip QR code" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打赏二维码"
-          }
-        }
-      }
-    },
-    "Tip method" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "打赏方式"
           }
         }
       }
@@ -3873,6 +4110,17 @@
         }
       }
     },
+    "Repeat vertical scrolling (experimental)" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "同向多滚一次（实验）"
+          }
+        }
+      }
+    },
     "Wheel behavior" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3884,6 +4132,17 @@
         }
       }
     },
+    "Wheel behavior with modifier keys" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "按住修饰键时滚轮行为"
+          }
+        }
+      }
+    },
     "Wheel shortcut axis" : {
       "extractionState" : "manual",
       "localizations" : {
@@ -3891,17 +4150,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "快捷操作的滚动轴向"
-          }
-        }
-      }
-    },
-    "Wheel shortcuts" : {
-      "extractionState" : "manual",
-      "localizations" : {
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "滚轮快捷操作"
           }
         }
       }

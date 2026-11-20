@@ -327,6 +327,7 @@ struct MirrorScrollSettings: Codable, Equatable {
 
     // Slow, distinct wheel notches keep enough movement even at high hardware resolution.
     static let minimumWheelNotchInput = 24.0
+    static let wheelMultipliers: [Double] = [1, 2, 3, 4, 5]
 
     var enabled: Bool?
     var speed: Double?
@@ -335,9 +336,24 @@ struct MirrorScrollSettings: Codable, Equatable {
     var frequency: Int?
     var nativeWheelEvents: Bool?
     var wheelMode: WheelMode?
+    var repeatSystemWheel: Bool?
+    var systemReverseVertical: Bool?
+    // Retained for older builds. This adjusted event distance rather than event count.
+    var systemWheelDistance: Double?
+    var systemWheelMultiplier: Double?
 
     var isEnabled: Bool { enabled ?? true }
     var resolvedWheelMode: WheelMode { wheelMode ?? (nativeWheelEvents == true ? .reversed : .smooth) }
+    var reversesSystemWheel: Bool { isEnabled && systemReverseVertical == true }
+    var wheelMultiplier: Double {
+        guard isEnabled else { return 1 }
+        if let systemWheelMultiplier {
+            // Keep the exact speed of an existing installation until the user changes it.
+            if systemWheelMultiplier == 1.25 || systemWheelMultiplier == 1.5 { return systemWheelMultiplier }
+            return Self.wheelMultipliers.contains(systemWheelMultiplier) ? systemWheelMultiplier : 1
+        }
+        return resolvedWheelMode == .system && repeatSystemWheel == true ? 2 : 1
+    }
     var hz: Int { frequency == 30 ? 30 : 60 }
     var scrollSpeed: Double { (speed ?? 1.25).clamped(to: 0.1 ... 4) }
     var responsiveness: Double { (response ?? 0.62).clamped(to: 0 ... 2) }

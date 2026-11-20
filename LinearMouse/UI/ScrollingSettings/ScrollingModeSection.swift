@@ -116,12 +116,6 @@ extension ScrollingSettings {
                 case .byLines, .byPixels:
                     EmptyView()
                 }
-                if state.showsContinuousScrollShiftTip {
-                    Button("Enable Shift for horizontal scrolling") {
-                        state.setShiftModifierToAlterOrientation()
-                    }
-                    .help("Hold Shift while scrolling to switch axis.")
-                }
             }
             .buttonStyle(SettingsSecondaryButtonStyle())
         }

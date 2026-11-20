@@ -1,22 +1,24 @@
 // SPDX-License-Identifier: MIT
 
-import CoreImage
+import AppKit
 import SwiftUI
 
 struct ProjectLinks: Decodable {
     private let repositoryAddress: String
-    private let koFi: String
-    private let afdian: String
+    private let paypalAddress: String
+    let paypalAccount: String
 
     enum CodingKeys: String, CodingKey {
-        case repositoryAddress = "repository", koFi, afdian
+        case repositoryAddress = "repository"
+        case paypalAddress = "paypal"
+        case paypalAccount
     }
 
     static let shared: Self = {
         guard let resource = Bundle.main.url(forResource: "ProjectLinks", withExtension: "plist"),
               let data = try? Data(contentsOf: resource),
               let links = try? PropertyListDecoder().decode(Self.self, from: data) else {
-            return Self(repositoryAddress: "", koFi: "", afdian: "")
+            return Self(repositoryAddress: "", paypalAddress: "", paypalAccount: "")
         }
         return links
     }()
@@ -34,11 +36,10 @@ struct ProjectLinks: Decodable {
         return url
     }
 
-    func url(for method: TipMethod) -> URL? {
-        switch method {
-        case .koFi: return Self.webURL(koFi, host: "ko-fi.com")
-        case .afdian: return Self.webURL(afdian, host: "afdian.com")
-        }
+    var paypal: URL? {
+        guard let url = Self.webURL(paypalAddress, host: "paypal.me"),
+              url.pathComponents.count == 2 else { return nil }
+        return url
     }
 
     private static func webURL(_ address: String, host: String) -> URL? {
@@ -49,17 +50,6 @@ struct ProjectLinks: Decodable {
     }
 }
 
-enum TipMethod: CaseIterable {
-    case koFi, afdian
-
-    var title: LocalizedStringKey {
-        switch self {
-        case .koFi: return "Ko-fi"
-        case .afdian: return "Afdian"
-        }
-    }
-}
-
 struct TipButton: View {
     @State private var showing = false
 
@@ -67,7 +57,7 @@ struct TipButton: View {
         Button { showing.toggle() } label: {
             Text("Tip")
                 .font(.body.weight(.medium))
-                .foregroundColor(SettingsControlColor.accent)
+                .foregroundColor(SettingsTheme.tipText)
                 .padding(.horizontal, 5)
                 .frame(minHeight: 30)
                 .contentShape(Rectangle())
@@ -81,44 +71,45 @@ struct TipButton: View {
 }
 
 private struct TipPopover: View {
-    @State private var method = TipMethod.allCases.first { ProjectLinks.shared.url(for: $0) != nil } ?? .koFi
+    @State private var copied = false
+    private let account = ProjectLinks.shared.paypalAccount
+    private let paypalURL = ProjectLinks.shared.paypal
 
     var body: some View {
-        VStack(spacing: 12) {
-            Picker("Tip method", selection: $method) {
-                ForEach(TipMethod.allCases, id: \.self) { method in
-                    Text(method.title).tag(method)
+        VStack(spacing: 10) {
+            Text(verbatim: "PayPal")
+                .font(.headline)
+            Text(verbatim: account)
+                .font(.system(.body, design: .monospaced))
+                .accessibilityLabel(Text("PayPal account"))
+                .accessibilityValue(Text(verbatim: account))
+            HStack(spacing: 8) {
+                if let url = paypalURL {
+                    Link("Open PayPal", destination: url)
+                        .buttonStyle(SettingsPrimaryButtonStyle())
                 }
-            }
-            .labelsHidden()
-            .pickerStyle(.segmented)
-            if let url = ProjectLinks.shared.url(for: method) {
-                if let image = qrCode(for: url) {
-                    Image(decorative: image, scale: 1)
-                        .interpolation(.none)
-                        .resizable()
-                        .frame(width: CGFloat(image.width) * 4, height: CGFloat(image.height) * 4)
-                        .padding(16)
-                        .background(Color.white)
-                        .accessibilityLabel(Text("Tip QR code"))
+                Button {
+                    NSPasteboard.general.clearContents()
+                    copied = NSPasteboard.general.setString(account, forType: .string)
+                } label: {
+                    Label {
+                        if copied {
+                            Text("Copied")
+                        } else {
+                            Text("Copy account")
+                        }
+                    } icon: {
+                        Image(systemName: copied ? "checkmark" : "doc.on.doc")
+                    }
                 }
-                Link("Open tip page", destination: url)
-            } else {
-                Text("This method is not available yet.")
-                    .foregroundColor(.secondary)
-                    .padding(.vertical, 12)
+                .buttonStyle(SettingsSecondaryButtonStyle())
+                .disabled(account.isEmpty)
             }
             Text("Thank you for supporting MouseEasy!")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
         }
         .padding(16)
         .frame(minWidth: 238)
-    }
-
-    private func qrCode(for url: URL) -> CGImage? {
-        guard let filter = CIFilter(name: "CIQRCodeGenerator") else { return nil }
-        filter.setValue(Data(url.absoluteString.utf8), forKey: "inputMessage")
-        filter.setValue("M", forKey: "inputCorrectionLevel")
-        guard let output = filter.outputImage else { return nil }
-        return CIContext().createCGImage(output, from: output.extent)
     }
 }

@@ -45,6 +45,9 @@ type Forward = 4;
 export type Configuration = {
   $schema?: string;
 
+  /** Applications that use native input across all devices and displays, even when a matching scheme exists. */
+  excludedApps?: ({ app: string } | { processPath: string } | { processName: string })[];
+
   /** Independent mouse wheel tuning for the iPhone Mirroring app. */
   mirrorScrolling?: {
     enabled?: boolean;
@@ -54,8 +57,16 @@ export type Configuration = {
     frequency?: 30 | 60;
     /** Legacy preference. Used when wheelMode is absent. */
     nativeWheelEvents?: boolean;
-    /** Smooth the wheel, apply reversal to the original wheel event, or pass system wheel input through. */
+    /** Legacy mode. Mirroring now always uses the system wheel. */
     wheelMode?: "smooth" | "reversed" | "system";
+    /** Build 34: true in System wheel mode selects 2x when systemWheelMultiplier is absent. */
+    repeatSystemWheel?: boolean;
+    /** Reverse vertical mouse wheel input in iPhone Mirroring. Defaults to false. */
+    systemReverseVertical?: boolean;
+    /** Wheel speed in iPhone Mirroring, including horizontal scrolling with a modifier or a tilt wheel. Presets are 1x through 5x, with 1x as the default. Saved 1.25x and 1.5x settings are also supported. */
+    systemWheelMultiplier?: 1 | 1.25 | 1.5 | 2 | 3 | 4 | 5;
+    /** Build 33 preference, retained for rollback. */
+    systemWheelDistance?: 1 | 1.25 | 1.5 | 2;
   };
 
   /**

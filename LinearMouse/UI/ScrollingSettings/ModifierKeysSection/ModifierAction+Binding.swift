@@ -4,6 +4,35 @@
 import Foundation
 import SwiftUI
 
+struct WheelModifierKey: Hashable {
+    typealias Modifiers = Scheme.Scrolling.Modifiers
+
+    let label: String
+    let action: WritableKeyPath<Modifiers, Modifiers.Action?>
+
+    static let all = [
+        Self(label: "⌃ Ctrl", action: \.control),
+        Self(label: "⇧ Shift", action: \.shift),
+        Self(label: "⌥ Option", action: \.option),
+        Self(label: "⌘ Cmd", action: \.command)
+    ]
+}
+
+extension Scheme.Scrolling.Modifiers {
+    var axisSwitchKeys: [WheelModifierKey] {
+        get { WheelModifierKey.all.filter { self[keyPath: $0.action] == .alterOrientation } }
+        set {
+            for key in WheelModifierKey.all {
+                if newValue.contains(key) {
+                    self[keyPath: key.action] = .alterOrientation
+                } else if self[keyPath: key.action] == .alterOrientation {
+                    self[keyPath: key.action] = .auto
+                }
+            }
+        }
+    }
+}
+
 extension Binding where Value == Scheme.Scrolling.Modifiers.Action? {
     var kind: Binding<Scheme.Scrolling.Modifiers.Action.Kind> {
         Binding<Scheme.Scrolling.Modifiers.Action.Kind>(
@@ -42,7 +71,7 @@ extension Binding where Value == Scheme.Scrolling.Modifiers.Action? {
 
 extension Scheme.Scrolling.Modifiers.Action.Kind {
     @ViewBuilder
-    var label: some View {
+    func label(for direction: Scheme.Scrolling.BidirectionalDirection) -> some View {
         switch self {
         case .defaultAction:
             Text("Inherit default action")
@@ -51,7 +80,11 @@ extension Scheme.Scrolling.Modifiers.Action.Kind {
         case .noAction:
             Text("Do nothing")
         case .alterOrientation:
-            Text("Switch scroll direction")
+            if direction == .vertical {
+                Text("Scroll horizontally")
+            } else {
+                Text("Scroll vertically")
+            }
         case .changeSpeed:
             Text("Change scroll speed")
         case .bypassSmoothing:

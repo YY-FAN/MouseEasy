@@ -58,7 +58,40 @@ struct PortableMouseDefaultsTests {
         print("First install, native defaults, optional side keys, existing/empty/malformed profiles and returning-install checks passed")
     }
 
+    private static func validateAppExceptions() throws {
+        let allMice = DeviceMatcher(category: .mouse)
+        var defaults = Scheme()
+        defaults.scrolling.reverse.vertical = true
+        defaults.buttons.switchPrimaryButtonAndSecondaryButtons = true
+        defaults.pointer.focusFollowsMouse = true
+        defaults.pointer.speed = .value(0.5)
+        var custom = Scheme(if: [.init(app: "test.app")])
+        custom.scrolling.reverse.vertical = false
+        var config = Configuration(schemes: [defaults, custom])
+        let original = config.schemes
+        config.excludedApps = [.bundle("test.app"), .executable("/test/tool"), .executableName("test-worker")]
+        let decoded = try Configuration.load(from: config.dump())
+        precondition(decoded == config && decoded.usesProcessConditions)
+        let contexts: [Scheme.MatchContext] = [
+            .init(deviceMatcher: allMice, app: "test.app", display: "external"),
+            .init(app: "test.app.helper", parentApp: "test.app"),
+            .init(processName: "test-worker"), .init(processPath: "/test/tool")
+        ]
+        for context in contexts {
+            let result = decoded.matchScheme(in: context)
+            precondition(result.scrolling == .init() && result.buttons == .init() && result.pointer == .init() && result.logitech == .init())
+        }
+        precondition(decoded.matchScheme(withDeviceMatcher: allMice, withApp: "test.another",
+                                         withParentApp: "test.app").scrolling.reverse.vertical == true)
+        config.excludedApps = nil
+        let restored = config.matchScheme(withDeviceMatcher: allMice, withApp: "test.app")
+        precondition(restored.scrolling.reverse.vertical == false && restored.pointer.focusFollowsMouse == true)
+        precondition(config.schemes == original)
+        print("PASS: exception priority, both device and app rules bypassed, helpers, executable matching, round trip and restored overrides")
+    }
+
     static func main() throws {
+        try validateAppExceptions()
         try validateFirstLaunch()
         var checks = 0
         func check(_ condition: @autoclosure () -> Bool, _ message: String) {

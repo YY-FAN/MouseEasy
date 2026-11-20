@@ -1,9 +1,10 @@
 #!/bin/bash -e
 
-DMG_FILE="build/LinearMouse.dmg"
-
 cd $(dirname "$0")
 cd ..
+VERSION=$(awk '$1 == "MARKETING_VERSION" {print $3}' Config.xcconfig)
+BUILD=$(awk '$1 == "CURRENT_PROJECT_VERSION" {print $3}' Config.xcconfig)
+DMG_FILE="build/MouseEasy-${VERSION}-build${BUILD}.dmg"
 
 if [[ -z "$APPLE_ID" ]]; then
     echo "APPLE_ID not specified" >&2

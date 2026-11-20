@@ -24,6 +24,43 @@ final class EventTransformerManagerTests: XCTestCase {
         SettingsState.shared.recordedButtonMappingEvent = nil
     }
 
+    func testExcludedProcessGetsNativeInputAndResumesItsPreviousRoute() throws {
+        let pid = getpid()
+        let path = try XCTUnwrap(pid.processIdentity?.processPath)
+        var scheme = Scheme()
+        scheme.scrolling.reverse.vertical = true
+        scheme.buttons.switchPrimaryButtonAndSecondaryButtons = true
+        var configuration = Configuration(schemes: [scheme])
+        ConfigurationState.shared.configuration = configuration
+        let manager = makeManager()
+        func route(_ event: CGEvent) -> EventTransformerResolution {
+            manager.resolve(withCGEvent: event, withSourcePid: nil, withTargetPid: pid,
+                            withMouseLocationPid: nil, withDisplay: nil)
+        }
+        let wheel = try XCTUnwrap(CGEvent(scrollWheelEvent2Source: nil, units: .line, wheelCount: 1,
+                                          wheel1: 1, wheel2: 0, wheel3: 0))
+        XCTAssertEqual(route(wheel).transform(try XCTUnwrap(wheel.copy()))?.getIntegerValueField(.scrollWheelEventDeltaAxis1), -1)
+        configuration.excludedApps = [.executable(path)]
+        ConfigurationState.shared.configuration = configuration
+        let click = try XCTUnwrap(CGEvent(mouseEventSource: nil, mouseType: .leftMouseDown, mouseCursorPosition: .zero, mouseButton: .left))
+        let side = try XCTUnwrap(CGEvent(mouseEventSource: nil, mouseType: .otherMouseDown, mouseCursorPosition: .zero,
+                                         mouseButton: try XCTUnwrap(CGMouseButton(rawValue: 4))))
+        let key = try XCTUnwrap(CGEvent(keyboardEventSource: nil, virtualKey: 12, keyDown: true))
+        for event in [wheel, click, side, key] {
+            let resolution = route(event)
+            XCTAssertTrue(resolution.excludesApplication)
+            XCTAssertEqual((resolution.transformer as? [EventTransformer])?.count, 0)
+            XCTAssertTrue(resolution.transform(event) === event)
+        }
+        XCTAssertEqual(click.type, .leftMouseDown)
+        XCTAssertEqual(side.getIntegerValueField(.mouseEventButtonNumber), 4)
+        XCTAssertEqual(wheel.getIntegerValueField(.scrollWheelEventDeltaAxis1), 1)
+        configuration.excludedApps = nil
+        ConfigurationState.shared.configuration = configuration
+        XCTAssertEqual(route(wheel).transform(wheel)?.getIntegerValueField(.scrollWheelEventDeltaAxis1), -1)
+        XCTAssertTrue(postedEvents.isEmpty)
+    }
+
     func testRightSwipeEnablesMotionOnlyForItsTriggerAndDisablesOnRelease() throws {
         for lockPointer in [false, true] {
             warpedPositions.removeAll()

@@ -174,7 +174,11 @@ extension pid_t {
 
     fileprivate func processPath(for processIdentity: ProcessIdentity?) -> String? {
         Self.processPathCache.value(for: processIdentity) {
-            NSRunningApplication(processIdentifier: self)?.executableURL?.path
+            if let path = NSRunningApplication(processIdentifier: self)?.executableURL?.path { return path }
+            // Executables without a registered GUI app still support per-process settings.
+            var path = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+            guard proc_pidpath(self, &path, UInt32(path.count)) > 0 else { return nil }
+            return String(cString: path)
         }
     }
 
@@ -184,7 +188,7 @@ extension pid_t {
 
     fileprivate func processName(for processIdentity: ProcessIdentity?) -> String? {
         Self.processNameCache.value(for: processIdentity) {
-            NSRunningApplication(processIdentifier: self)?.executableURL?.lastPathComponent
+            processPath(for: processIdentity).map { URL(fileURLWithPath: $0).lastPathComponent }
         }
     }
 

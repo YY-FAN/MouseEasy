@@ -1,6 +1,7 @@
 // MIT License
 // Copyright (c) 2021-2026 LinearMouse
 
+import AppKit
 import Combine
 import Defaults
 import Foundation
@@ -16,15 +17,18 @@ class EventTransformerManager {
     private final class TransformerRoute {
         let id = UUID()
         let transformer: EventTransformer
+        let systemWheel: IPhoneMirroringSystemWheelTransformer?
         let autoScroll: AutoScrollTransformer?
         let autoScrollConfiguration: AutoScrollConfiguration?
 
         init(
             transformer: EventTransformer,
+            systemWheel: IPhoneMirroringSystemWheelTransformer?,
             autoScroll: AutoScrollTransformer?,
             autoScrollConfiguration: AutoScrollConfiguration?
         ) {
             self.transformer = transformer
+            self.systemWheel = systemWheel
             self.autoScroll = autoScroll
             self.autoScrollConfiguration = autoScrollConfiguration
         }
@@ -129,6 +133,7 @@ class EventTransformerManager {
 
     private var subscriptions = Set<AnyCancellable>()
     private var configuration = Configuration()
+    private var lastExclusion: (process: ProcessIdentity, excluded: Bool)?
     private var hasConfigurationSnapshot = false
     private var configuredMotionRequirements: PointerMotionRequirements = []
     private(set) var usesProcessConditions = false
@@ -178,7 +183,12 @@ class EventTransformerManager {
                     if diff.affectsFocusFollowsMouse {
                         FocusFollowsMouseController.shared.configure(configuration)
                     }
+                    let exceptionsChanged = self.configuration.excludedApps != configuration.excludedApps
                     self.configuration = configuration
+                    if exceptionsChanged {
+                        self.lastExclusion = nil
+                        _ = self.suspendIfExcluded(NSWorkspace.shared.frontmostApplication?.processIdentifier.processIdentity)
+                    }
                     self.hasConfigurationSnapshot = true
                     self.usesProcessConditions = configuration.usesProcessConditions
                     self.usesScrollHotkeys = configuration.schemes.contains { $0.scrolling.hotkeys.hasEnabledBinding }
@@ -201,6 +211,31 @@ class EventTransformerManager {
     /// Called from `EventThread.onWillStop` on the event thread.
     func resetForRestart() {
         forceResetState()
+    }
+
+    private func isExcluded(_ process: ProcessIdentity?) -> Bool {
+        guard configuration.excludedApps?.isEmpty == false, let process else { return false }
+        if let lastExclusion, lastExclusion.process == process { return lastExclusion.excluded }
+        let excluded = configuration.excludes(process)
+        lastExclusion = (process, excluded)
+        return excluded
+    }
+
+    // Cancel timers and release held actions on entry, including auto-scroll that
+    // might otherwise keep emitting while there is no physical input.
+    private func suspendIfExcluded(_ process: ProcessIdentity?) -> Bool {
+        guard isExcluded(process) else { return false }
+        if activeRoute != nil || !activeInteractions.isEmpty || sharedAutoScrollTransformer != nil {
+            forceResetState()
+            KeyboardActionBindingsController.shared.reset()
+        }
+        return true
+    }
+
+    func frontmostApplicationChanged(to pid: pid_t) {
+        EventThread.shared.perform { [weak self] in
+            _ = self?.suspendIfExcluded(pid.processIdentity)
+        }
     }
 
     private static let sourceBundleIdentifierBypassSet: Set<String> = [
@@ -275,10 +310,15 @@ class EventTransformerManager {
         withDisplay display: String?
     ) -> EventTransformerResolution {
         let device = DeviceManager.shared.deviceFromCGEvent(cgEvent)
-        let pid = mouseLocationPid ?? targetPid
+        let pid = mouseLocationPid ?? targetPid ?? (configuration.excludedApps?.isEmpty == false
+            ? NSWorkspace.shared.frontmostApplication?.processIdentifier : nil)
+        let process = pid?.processIdentity
+        if suspendIfExcluded(process) {
+            return .init(transformer: [], context: .init(device: device), excludesApplication: true)
+        }
         let selection = RouteSelection(
             device: device,
-            process: pid?.processIdentity,
+            process: process,
             display: display
         )
 
@@ -337,19 +377,8 @@ class EventTransformerManager {
             withDisplay: effectiveSelection.display,
             updateActiveRoute: true
         )
-        if cgEvent.type == .scrollWheel,
-           IPhoneMirroringScrollCompatibility.shouldUse(
-               bundleIdentifier: effectiveSelection.process?.bundleIdentifier,
-               isMouse: effectiveSelection.device?.category == .mouse
-           ) {
-            let mirror = configuration.mirrorScrolling ?? MirrorScrollSettings()
-            let mode = mirror.isEnabled ? mirror.resolvedWheelMode : nil
-            IPhoneMirroringScrollCompatibility.recordInput(cgEvent, mode: mode?.rawValue ?? "inherited")
-            if mode == .system {
-                // Keep the actual hardware event on the system path for an A/B
-                // comparison. Other event types keep their configured mapping.
-                return .init(transformer: [], context: .init(device: effectiveSelection.device))
-            }
+        if cgEvent.type == .scrollWheel, let systemWheel = route.systemWheel {
+            return .init(transformer: systemWheel, context: .init(device: effectiveSelection.device))
         }
         if let (_, interaction) = activeInteraction {
             if isMouseButtonInteractionEvent(cgEvent) {
@@ -692,7 +721,8 @@ class EventTransformerManager {
         withProcess process: ProcessIdentity?,
         withDisplay display: String?
     ) -> EventTransformer {
-        getRoute(
+        if isExcluded(process) { return [EventTransformer]() }
+        return getRoute(
             withDevice: device,
             withProcess: process,
             withDisplay: display,
@@ -764,6 +794,7 @@ class EventTransformerManager {
         _ context: LogitechEventContext
     ) -> LogitechControlEventHandlingResult {
         let pid = usesProcessConditions ? context.pid : nil
+        if suspendIfExcluded(pid?.processIdentity) { return .notHandled }
         let selection = RouteSelection(
             device: context.device,
             process: pid?.processIdentity,
@@ -893,17 +924,7 @@ class EventTransformerManager {
         let scrollKey = device.map { InteractionKey.device($0.id) } ?? .unidentified
         let scrollGesture = scrollGestures[scrollKey] ?? ScrollGestureOwnership()
         scrollGestures[scrollKey] = scrollGesture
-        let usesMirroringScrollDelivery = IPhoneMirroringScrollCompatibility.shouldUse(
-            bundleIdentifier: process?.bundleIdentifier,
-            isMouse: device?.category == .mouse
-        )
-        let postSmoothedEvent: (CGEvent) -> Void = { [postEvent] event in
-            if usesMirroringScrollDelivery {
-                IPhoneMirroringScrollCompatibility.post(event, usesCanonicalPixelDeltas: true, using: postEvent)
-            } else {
-                postEvent(event, .cgSessionEventTap)
-            }
-        }
+        let isMirroring = process?.bundleIdentifier == IPhoneMirroringScrollCompatibility.bundleIdentifier
         var eventTransformer: [EventTransformer] = []
         if usesKeyboardMappings {
             eventTransformer.append(KeyboardActionBindingsTransformer(
@@ -925,21 +946,11 @@ class EventTransformerManager {
             }
         }
 
-        var smoothed = Scheme.Scrolling.Bidirectional(
+        let smoothed = Scheme.Scrolling.Bidirectional(
             vertical: scheme.scrolling.smoothed.vertical?.isEnabled == true ? scheme.scrolling.smoothed.vertical : nil,
-            horizontal: scheme.scrolling.smoothed.horizontal?.isEnabled == true ? scheme.scrolling.smoothed
-                .horizontal : nil
+            horizontal: scheme.scrolling.smoothed.horizontal?.isEnabled == true ? scheme.scrolling.smoothed.horizontal : nil
         )
-        let mirror = configuration.mirrorScrolling ?? MirrorScrollSettings()
-        let usesMirrorSettings = usesMirroringScrollDelivery && mirror.isEnabled
-        let preservesMirrorWheelEvents = usesMirrorSettings && mirror.resolvedWheelMode == .reversed
-        let usesMirrorSmoothing = usesMirrorSettings && mirror.resolvedWheelMode == .smooth
-        if preservesMirrorWheelEvents {
-            smoothed = .init()
-        } else if usesMirrorSmoothing {
-            smoothed = .init(vertical: mirror.tuning, horizontal: mirror.tuning)
-        }
-        let hasSmoothedScrolling = smoothed.vertical != nil || smoothed.horizontal != nil
+        let hasSmoothedScrolling = !isMirroring && (smoothed.vertical != nil || smoothed.horizontal != nil)
         let buttonMappings = (scheme.buttons.mappings ?? []).map { mapping in
             var mapping = mapping
             mapping.normalizeAsStructured()
@@ -1001,7 +1012,7 @@ class EventTransformerManager {
             ))
         }
 
-        if device != nil, !preservesMirrorWheelEvents {
+        if device != nil, !isMirroring {
             let highResolutionWheelNormalizer = LogitechHighResolutionWheelNormalizer(
                 verticalMode: highResolutionWheelNormalizerMode(
                     distance: scheme.scrolling.distance.vertical,
@@ -1039,14 +1050,12 @@ class EventTransformerManager {
             }
             eventTransformer.append(SmoothedScrollingTransformer(
                 smoothed: smoothed,
-                deliveryProfile: usesMirroringScrollDelivery ? (usesMirrorSmoothing && mirror.hz == 30 ? .mirror30Hz : .iPhoneMirroring) : .standard,
-                usesMirrorWheelTuning: usesMirrorSmoothing,
                 preserveContinuousScrolling: scheme.scrolling.preserveContinuousScrolling == true,
-                eventSink: postSmoothedEvent
+                eventSink: { [postEvent] in postEvent($0, .cgSessionEventTap) }
             ))
         }
 
-        if !preservesMirrorWheelEvents {
+        if !isMirroring {
             if let distance = scheme.scrolling.distance.horizontal, smoothed.horizontal == nil {
                 eventTransformer.append(LinearScrollingHorizontalTransformer(distance: distance))
             }
@@ -1124,17 +1133,14 @@ class EventTransformerManager {
             eventTransformer.append(PointerRedirectsToScrollTransformer(redirect: redirectPointerToScroll))
         }
 
-        if usesMirroringScrollDelivery {
-            eventTransformer.append(IPhoneMirroringScrollTransformer(
-                preservesSourceEvent: preservesMirrorWheelEvents,
-                preserveContinuousScrolling: scheme.scrolling.preserveContinuousScrolling == true,
-                reversesDirection: scheme.scrolling.reverse.vertical == true || scheme.scrolling.reverse.horizontal == true,
-                eventSink: postEvent
-            ))
-        }
-
+        // A mirror wheel always takes the native route, including with legacy
+        // smooth configurations. Trackpads and unidentified devices pass through it.
         let route = TransformerRoute(
             transformer: eventTransformer,
+            systemWheel: isMirroring ? IPhoneMirroringSystemWheelTransformer(
+                settings: configuration.mirrorScrolling ?? .init(), modifiers: scheme.scrolling.modifiers,
+                eventSink: postEvent
+            ) : nil,
             autoScroll: autoScrollTransformer,
             autoScrollConfiguration: autoScrollConfiguration
         )

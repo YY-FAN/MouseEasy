@@ -88,9 +88,9 @@ class ScrollingSettingsState: ObservableObject {
 }
 
 extension ScrollingSettingsState {
-    var reverseScrolling: Bool {
-        get { mergedScheme.scrolling.reverse[direction] ?? false }
-        set { scheme.scrolling.reverse[direction] = newValue }
+    var reverseHorizontalScrolling: Bool {
+        get { mergedScheme.scrolling.reverse.horizontal ?? false }
+        set { scheme.scrolling.reverse.horizontal = newValue }
     }
 
     var reverseVerticalScrolling: Bool {
@@ -213,15 +213,6 @@ extension ScrollingSettingsState {
                 "By Lines"
             case .byPixels:
                 "By Pixels"
-            }
-        }
-
-        var sendsContinuousScrollEvents: Bool {
-            switch self {
-            case .smoothed, .byPixels:
-                true
-            case .accelerated, .byLines:
-                false
             }
         }
     }
@@ -430,25 +421,11 @@ extension ScrollingSettingsState {
         }
     }
 
-    var modifiers: Scheme.Scrolling.Modifiers {
-        get {
-            mergedScheme.scrolling.modifiers[direction] ?? .init()
-        }
-        set {
-            scheme.scrolling.modifiers[direction] = newValue
-        }
-    }
-
-    var showsContinuousScrollShiftTip: Bool {
-        direction == .vertical
-            && scrollingMode.sendsContinuousScrollEvents
-            && (modifiers.shift?.kind ?? .defaultAction) != .alterOrientation
-    }
-
-    func setShiftModifierToAlterOrientation() {
-        var modifiers = modifiers
-        modifiers.shift = .alterOrientation
-        self.modifiers = modifiers
+    func modifierActions(for axis: Scheme.Scrolling.BidirectionalDirection) -> Binding<Scheme.Scrolling.Modifiers> {
+        Binding(
+            get: { self.mergedScheme.scrolling.modifiers[axis] ?? .init() },
+            set: { self.scheme.scrolling.modifiers[axis] = $0 }
+        )
     }
 
     private var currentSmoothedConfiguration: Scheme.Scrolling.Smoothed? {

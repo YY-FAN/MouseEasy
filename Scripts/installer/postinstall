@@ -1,0 +1,9 @@
+#!/bin/sh
+# Launch Services uses a per-user registry. Offline and unattended installs
+# are discovered normally when the target volume is booted.
+[ "$3" = / ] || exit 0
+uid=$(/usr/bin/stat -f %u /dev/console) || exit 0
+[ "$uid" -ge 500 ] || exit 0
+scripts_dir=$(/usr/bin/dirname "$0")
+/bin/launchctl asuser "$uid" /usr/bin/sudo -u "#$uid" /usr/bin/osascript -l JavaScript - < "$scripts_dir/register-installed.js" || /usr/bin/logger -t MouseEasy "Could not refresh user application registration"
+exit 0

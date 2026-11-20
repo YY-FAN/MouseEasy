@@ -202,6 +202,7 @@ class Device {
     private var verbosedLoggingOn = Defaults[.verbosedLoggingOn]
 
     let pointerSchemeState = PointerSchemeApplicationState()
+    private(set) var inputSettingsSuspended = false
 
     var supportsLinearPointerScaling: Bool {
         initialUseLinearScalingMouseAcceleration != nil
@@ -794,6 +795,16 @@ extension Device {
         }
     }
 
+    func setInputSettingsSuspended(_ suspended: Bool) {
+        guard suspended != inputSettingsSuspended else { return }
+        inputSettingsSuspended = suspended
+        if suspended {
+            releaseSyntheticInputReportButtons()
+            restorePointerAccelerationAndPointerSpeed()
+            restoreUseLinearScalingMouseAcceleration()
+        }
+    }
+
     /// Clears lifecycle-scoped Logitech access after the asynchronous hardware
     /// barrier, then restores the software pointer properties. No HID++ I/O is
     /// performed from this main-thread method.
@@ -854,7 +865,7 @@ extension Device {
     }
 
     private func inputReportCallback(_ device: PointerDevice, _ report: Data) {
-        guard allowsDeviceWork else {
+        guard allowsDeviceWork, !inputSettingsSuspended else {
             return
         }
 

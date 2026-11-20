@@ -4,9 +4,9 @@
 <dict>
 	<key>repository</key>
 	<string>https://github.com/YY-FAN/MouseEasy</string>
-	<key>koFi</key>
-	<string></string>
-	<key>afdian</key>
-	<string></string>
+	<key>paypalAccount</key>
+	<string>yccmrxx@gmail.com</string>
+	<key>paypal</key>
+	<string>https://paypal.me/YYFANApps</string>
 </dict>
 </plist>

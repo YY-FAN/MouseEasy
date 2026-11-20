@@ -7,6 +7,7 @@ import SwiftUI
 extension ScrollingSettings.ModifierKeysSection {
     struct ModifierKeyActionPicker: View {
         var label: String
+        var direction: Scheme.Scrolling.BidirectionalDirection = .vertical
         @Binding var action: Scheme.Scrolling.Modifiers.Action?
 
         var body: some View {
@@ -17,7 +18,7 @@ extension ScrollingSettings.ModifierKeysSection {
                     Spacer(minLength: 12)
                     Picker(label, selection: $action.kind) {
                         ForEach(ActionType.allCases) { type in
-                            type.label.tag(type)
+                            type.label(for: direction).tag(type)
                             if type == .defaultAction || type == .noAction { Divider() }
                         }
                     }

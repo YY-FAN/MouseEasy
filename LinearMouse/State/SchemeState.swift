@@ -17,7 +17,10 @@ class SchemeState: ObservableObject {
 
     init() {
         configurationState.$configuration
-            .sink { [weak self] _ in
+            .sink { [weak self] configuration in
+                if let app = self?.currentApp, configuration.excludedApps?.contains(app) == true {
+                    self?.currentApp = nil
+                }
                 self?.objectWillChange.send()
             }
             .store(in: &subscriptions)
@@ -73,59 +76,30 @@ extension SchemeState {
         return conditionDeviceMatcher.match(with: targetMatcher)
     }
 
-    private func hasMatchingSchemes(
-        for matcher: DeviceMatcher?,
-        device: Device?,
-        app: AppTarget?,
-        display: String?
-    ) -> Bool {
-        let (appId, processPath, processName) = extractAppComponents(from: app)
+    private func matches(_ condition: Scheme.If, deviceMatcher: DeviceMatcher?, device: Device?,
+                         app: AppTarget?, display: String?) -> Bool {
+        let (appID, path, name) = extractAppComponents(from: app)
+        guard let conditionDevice = condition.device else { return false }
+        return deviceConditionMatches(conditionDevice, targetMatcher: deviceMatcher, targetDevice: device)
+            && condition.app == appID && condition.processPath == path && condition.processName == name
+            && condition.display == display
+    }
 
-        return schemes.contains { scheme in
-            guard let conditions = scheme.if else {
-                return false
-            }
-
-            return conditions.contains { condition in
-                guard let deviceMatcher = condition.device,
-                      deviceConditionMatches(deviceMatcher, targetMatcher: matcher, targetDevice: device) else {
-                    return false
-                }
-
-                let appMatches = condition.app == appId && condition.processPath == processPath
-                    && condition.processName == processName
-                let displayMatches = condition.display == display
-
-                return appMatches && displayMatches
-            }
+    private func hasMatchingSchemes(for matcher: DeviceMatcher?, device: Device?, app: AppTarget?, display: String?) -> Bool {
+        schemes.contains { scheme in
+            scheme.if?.contains { matches($0, deviceMatcher: matcher, device: device, app: app, display: display) } == true
         }
     }
 
-    private func deleteMatchingSchemes(
-        for matcher: DeviceMatcher?,
-        device: Device?,
-        app: AppTarget?,
-        display: String?
-    ) {
-        let (appId, processPath, processName) = extractAppComponents(from: app)
-
-        schemes.removeAll { scheme in
-            guard let conditions = scheme.if else {
-                return false
-            }
-
-            return conditions.contains { condition in
-                guard let deviceMatcher = condition.device,
-                      deviceConditionMatches(deviceMatcher, targetMatcher: matcher, targetDevice: device) else {
-                    return false
-                }
-
-                let appMatches = condition.app == appId && condition.processPath == processPath
-                    && condition.processName == processName
-                let displayMatches = condition.display == display
-
-                return appMatches && displayMatches
-            }
+    private func deleteMatchingSchemes(for matcher: DeviceMatcher?, device: Device?, app: AppTarget?, display: String?) {
+        schemes = schemes.compactMap { scheme in
+            guard let conditions = scheme.if else { return scheme }
+            let remaining = conditions.filter { !matches($0, deviceMatcher: matcher, device: device, app: app, display: display) }
+            guard remaining.count != conditions.count else { return scheme }
+            guard !remaining.isEmpty else { return nil }
+            var changed = scheme
+            changed.if = remaining
+            return changed
         }
     }
 
@@ -167,28 +141,11 @@ extension SchemeState {
     }
 
     var currentAppName: String? {
-        switch currentApp {
-        case .none:
-            return nil
-        case let .bundle(bundleIdentifier):
-            return try? readInstalledApp(bundleIdentifier: bundleIdentifier)?.bundleName ?? bundleIdentifier
-        case let .executable(path):
-            return URL(fileURLWithPath: path).lastPathComponent
-        case let .executableName(name):
-            return name
-        }
+        currentApp?.displayName
     }
 
-    var targetSpecificSchemes: [EnumeratedSequence<[Scheme]>.Element] {
-        guard let deviceMatcher else {
-            return []
-        }
-
-        if let category = deviceMatcher.categoryOnlyValue {
-            return schemes.allDeviceCategorySpecificSchemes(of: category)
-        }
-
-        return schemes.allDeviceMatcherSpecificSchemes(of: deviceMatcher)
+    var showsMirrorScrollSettings: Bool {
+        currentApp == nil || currentApp == .bundle(IPhoneMirroringScrollCompatibility.bundleIdentifier)
     }
 
     var scheme: Scheme {
@@ -371,6 +328,29 @@ extension SchemeState {
 
     func hasMatchingSchemes(forApp app: AppTarget?, forDisplay display: String?) -> Bool {
         hasMatchingSchemes(for: deviceMatcher, device: nil, app: app, display: display)
+    }
+
+    func ensureAppSchemes(for apps: [AppTarget], forDisplay display: String?) {
+        guard let deviceMatcher else { return }
+        var updated = schemes
+        for target in apps {
+            // Existing overrides, including shared rules, keep their values.
+            guard !updated.contains(where: { scheme in
+                scheme.if?.contains { matches($0, deviceMatcher: deviceMatcher, device: nil, app: target, display: display) } == true
+            }) else { continue }
+            let (app, path, name) = extractAppComponents(from: target)
+            guard case let .insertAt(index) = updated.schemeIndex(
+                ofDeviceMatcher: deviceMatcher, ofApp: app, ofProcessPath: path,
+                ofProcessName: name, ofDisplay: display
+            ) else { continue }
+            var condition = Scheme.If(device: deviceMatcher.condition)
+            condition.app = app
+            condition.processPath = path
+            condition.processName = name
+            condition.display = display
+            updated.insert(Scheme(if: [condition]), at: index)
+        }
+        if updated.count != schemes.count { schemes = updated }
     }
 
     func deleteMatchingSchemes() {
